@@ -1,5 +1,6 @@
 import { Tabs } from 'expo-router';
 import { Home, Search, ShoppingBag, Heart, User, Play } from 'lucide-react-native';
+import { Platform } from 'react-native';
 import { colors } from '@/lib/theme';
 import { useCart } from '@/lib/CartContext';
 import { useWishlist } from '@/lib/WishlistContext';
@@ -7,6 +8,10 @@ import { useWishlist } from '@/lib/WishlistContext';
 export default function TabLayout() {
   const { totalItems } = useCart();
   const { items } = useWishlist();
+
+  // Bottom padding: extra space on iOS for home indicator, safe on Android too
+  const tabBarHeight = Platform.OS === 'ios' ? 82 : 72;
+  const tabBarPaddingBottom = Platform.OS === 'ios' ? 24 : 10;
 
   return (
     <Tabs
@@ -18,13 +23,22 @@ export default function TabLayout() {
           backgroundColor: colors.surface,
           borderTopColor: colors.border,
           borderTopWidth: 1,
-          height: 60,
-          paddingBottom: 6,
-          paddingTop: 6,
+          height: tabBarHeight,
+          paddingBottom: tabBarPaddingBottom,
+          paddingTop: 8,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.06,
+          shadowRadius: 8,
+          elevation: 8,
         },
         tabBarLabelStyle: {
           fontSize: 11,
-          fontWeight: '500',
+          fontWeight: '600',
+          marginTop: 2,
+        },
+        tabBarIconStyle: {
+          marginBottom: 0,
         },
       }}
     >

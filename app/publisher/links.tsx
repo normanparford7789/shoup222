@@ -39,7 +39,8 @@ type AffiliateLinkWithProduct = AffiliateLink & {
   product: Product & { images: ProductImage[] };
 };
 
-const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
+// Production website URL — affiliate links point directly to the product page
+const WEBSITE_URL = 'https://shoup222-production.up.railway.app';
 
 export default function PublisherLinksScreen() {
   const { user, isPublisher } = useAuth();
@@ -95,8 +96,14 @@ export default function PublisherLinksScreen() {
       day: 'numeric',
     });
 
-  const buildAffiliateUrl = (code: string) =>
-    `${SUPABASE_URL}/functions/v1/affiliate-redirect?code=${code}`;
+  const buildAffiliateUrl = (code: string, productSlug?: string) => {
+    if (productSlug) {
+      // Direct link to the product page with affiliate tracking code
+      return `${WEBSITE_URL}/product/${productSlug}?ref=${code}`;
+    }
+    // Fallback: website home with ref code
+    return `${WEBSITE_URL}?ref=${code}`;
+  };
 
   // ── Create link flow ──────────────────────────────────────────
   const openCreateModal = async () => {
@@ -204,7 +211,7 @@ export default function PublisherLinksScreen() {
   const renderItem = ({ item }: { item: AffiliateLinkWithProduct }) => {
     const product = item.product;
     const imageUrl = product?.images?.[0]?.image_url;
-    const affiliateUrl = buildAffiliateUrl(item.affiliate_code);
+    const affiliateUrl = buildAffiliateUrl(item.affiliate_code, product?.slug);
 
     return (
       <View style={styles.linkCard}>

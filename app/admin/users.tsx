@@ -539,62 +539,65 @@ export default function AdminUsersScreen() {
 
                 {/* Actions */}
                 <View style={styles.actionRow}>
-                  {/* Role */}
-                  <TouchableOpacity
-                    style={styles.actionBtn}
-                    onPress={() => setRoleModalUser(u)}
-                    disabled={actionLoading === `role-${u.id}`}
-                  >
-                    <Shield size={16} color={colors.primary[600]} />
-                    <Text style={styles.actionBtnText}>Role</Text>
-                  </TouchableOpacity>
-
-                  {/* Ban / Unban */}
-                  <TouchableOpacity
-                    style={styles.actionBtn}
-                    onPress={() => handleBanToggle(u)}
-                    disabled={actionLoading === `ban-${u.id}`}
-                  >
-                    {actionLoading === `ban-${u.id}` ? (
-                      <ActivityIndicator size={16} color={colors.error[500]} />
-                    ) : u.is_banned ? (
-                      <ShieldOff size={16} color={colors.success[600]} />
-                    ) : (
-                      <Ban size={16} color={colors.error[500]} />
-                    )}
-                    <Text style={[styles.actionBtnText, { color: u.is_banned ? colors.success[600] : colors.error[500] }]}>
-                      {u.is_banned ? 'Unban' : 'Ban'}
-                    </Text>
-                  </TouchableOpacity>
-
-                  {/* Activate / Deactivate */}
-                  <TouchableOpacity
-                    style={styles.actionBtn}
-                    onPress={() => handleActiveToggle(u)}
-                    disabled={actionLoading === `active-${u.id}`}
-                  >
-                    {actionLoading === `active-${u.id}` ? (
-                      <ActivityIndicator size={16} color={colors.neutral[600]} />
-                    ) : u.is_active ? (
-                      <XCircle size={16} color={colors.neutral[600]} />
-                    ) : (
-                      <CheckCircle size={16} color={colors.success[600]} />
-                    )}
-                    <Text style={[styles.actionBtnText, { color: u.is_active ? colors.neutral[600] : colors.success[600] }]}>
-                      {u.is_active ? 'Deactivate' : 'Activate'}
-                    </Text>
-                  </TouchableOpacity>
-
-                  {/* Merchant restrictions (only for merchants) */}
-                  {u.role === 'merchant' ? (
+                  {/* Row 1 */}
+                  <View style={styles.actionRowInner}>
+                    {/* Role */}
                     <TouchableOpacity
                       style={styles.actionBtn}
-                      onPress={() => openRestrictions(u)}
+                      onPress={() => setRoleModalUser(u)}
+                      disabled={actionLoading === `role-${u.id}`}
                     >
-                      <Settings2 size={16} color={colors.primary[600]} />
-                      <Text style={styles.actionBtnText}>Restrict</Text>
+                      <Shield size={15} color={colors.primary[600]} />
+                      <Text style={styles.actionBtnText}>Role</Text>
                     </TouchableOpacity>
-                  ) : null}
+
+                    {/* Ban / Unban */}
+                    <TouchableOpacity
+                      style={[styles.actionBtn, u.is_banned ? styles.actionBtnSuccess : styles.actionBtnDanger]}
+                      onPress={() => handleBanToggle(u)}
+                      disabled={actionLoading === `ban-${u.id}`}
+                    >
+                      {actionLoading === `ban-${u.id}` ? (
+                        <ActivityIndicator size={15} color={u.is_banned ? colors.success[600] : colors.error[500]} />
+                      ) : u.is_banned ? (
+                        <ShieldOff size={15} color={colors.success[600]} />
+                      ) : (
+                        <Ban size={15} color={colors.error[500]} />
+                      )}
+                      <Text style={[styles.actionBtnText, { color: u.is_banned ? colors.success[600] : colors.error[500] }]}>
+                        {u.is_banned ? 'Unban' : 'Ban'}
+                      </Text>
+                    </TouchableOpacity>
+
+                    {/* Activate / Deactivate */}
+                    <TouchableOpacity
+                      style={[styles.actionBtn, u.is_active ? styles.actionBtnNeutral : styles.actionBtnSuccess]}
+                      onPress={() => handleActiveToggle(u)}
+                      disabled={actionLoading === `active-${u.id}`}
+                    >
+                      {actionLoading === `active-${u.id}` ? (
+                        <ActivityIndicator size={15} color={colors.neutral[600]} />
+                      ) : u.is_active ? (
+                        <XCircle size={15} color={colors.neutral[600]} />
+                      ) : (
+                        <CheckCircle size={15} color={colors.success[600]} />
+                      )}
+                      <Text style={[styles.actionBtnText, { color: u.is_active ? colors.neutral[600] : colors.success[600] }]}>
+                        {u.is_active ? 'Deactivate' : 'Activate'}
+                      </Text>
+                    </TouchableOpacity>
+
+                    {/* Merchant restrictions (only for merchants) */}
+                    {u.role === 'merchant' ? (
+                      <TouchableOpacity
+                        style={styles.actionBtn}
+                        onPress={() => openRestrictions(u)}
+                      >
+                        <Settings2 size={15} color={colors.primary[600]} />
+                        <Text style={styles.actionBtnText}>Restrict</Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
                 </View>
               </View>
             ))}
@@ -1123,22 +1126,40 @@ const styles = StyleSheet.create({
   },
   // Actions
   actionRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
     marginTop: spacing.md,
     paddingTop: spacing.md,
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
+  actionRowInner: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
   actionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: spacing.md,
+    gap: 5,
+    paddingHorizontal: spacing.sm + 4,
     paddingVertical: spacing.sm,
     borderRadius: radius.md,
     backgroundColor: colors.neutral[50],
+    borderWidth: 1,
+    borderColor: colors.border,
+    minWidth: 72,
+    justifyContent: 'center',
+  },
+  actionBtnDanger: {
+    backgroundColor: colors.error[50],
+    borderColor: colors.error[100],
+  },
+  actionBtnSuccess: {
+    backgroundColor: colors.success[50],
+    borderColor: colors.success[100],
+  },
+  actionBtnNeutral: {
+    backgroundColor: colors.neutral[100],
+    borderColor: colors.neutral[200],
   },
   actionBtnText: {
     ...typography.caption,

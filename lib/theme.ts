@@ -2,16 +2,16 @@ import { Platform } from 'react-native';
 
 export const colors = {
   primary: {
-    50: '#fbf8ee',
-    100: '#f5edd5',
-    200: '#ecd9a8',
-    300: '#e0c576',
-    400: '#d4af37',
-    500: '#c9a227',
-    600: '#b8860b',
-    700: '#9a7008',
-    800: '#7a5806',
-    900: '#5c4204',
+    50: '#f2f2f2',
+    100: '#e0e0e0',
+    200: '#c2c2c2',
+    300: '#a3a3a3',
+    400: '#666666',
+    500: '#404040',
+    600: '#1a1a1a',
+    700: '#0d0d0d',
+    800: '#080808',
+    900: '#030303',
   },
   neutral: {
     0: '#ffffff',
@@ -67,9 +67,9 @@ export const colors = {
   border: '#e5e5e5',
   inputBg: '#f5f5f5',
   overlay: 'rgba(0,0,0,0.5)',
-  gold: '#d4af37',
-  goldLight: '#f5d77a',
-  goldDark: '#b8860b',
+  gold: '#1a1a1a',
+  goldLight: '#404040',
+  goldDark: '#0d0d0d',
   dark: '#0a0a0a',
 };
 
