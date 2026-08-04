@@ -36,6 +36,8 @@ jobs:
             echo "npm install failed (attempt $attempt), retrying..."
             sleep 10
           done
+      - name: Fix Expo SDK dependency versions
+        run: npx expo install --fix
       - name: Create .env file
         run: |
           echo "EXPO_PUBLIC_SUPABASE_URL=${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}" > .env
@@ -81,6 +83,8 @@ jobs:
             echo "npm install failed (attempt $attempt), retrying..."
             sleep 10
           done
+      - name: Fix Expo SDK dependency versions
+        run: npx expo install --fix
       - name: Create .env file
         run: |
           echo "EXPO_PUBLIC_SUPABASE_URL=${{ secrets.EXPO_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co' }}" > .env
