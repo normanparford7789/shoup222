@@ -1,0 +1,29 @@
+name: Deploy Supabase Edge Functions
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Link project
+        run: |
+          supabase link --project-ref "dmzmsgolisgcvbfaekby"
+        env:
+          SUPABASE_ACCESS_TOKEN: "sbp_b53344bf6d6d8028d79ea85f6ca12ec950dab178"
+
+      - name: Deploy Edge Functions
+        run: |
+          supabase functions deploy --project-ref "dmzmsgolisgcvbfaekby"
+        env:
+          SUPABASE_ACCESS_TOKEN: "sbp_b53344bf6d6d8028d79ea85f6ca12ec950dab178"
