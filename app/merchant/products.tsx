@@ -29,6 +29,7 @@ import { colors, spacing, radius, typography, shadows } from '@/lib/theme';
 import { useAuth } from '@/lib/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/Button';
+import { pickAndUploadImage, isCloudinaryConfigured } from '@/lib/cloudinary';
 import type { Product, Category, ProductImage } from '@/lib/supabase';
 
 type ProductWithRelations = Product & {
@@ -78,6 +79,7 @@ export default function MerchantProductsScreen() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -537,17 +539,41 @@ export default function MerchantProductsScreen() {
                 ))}
               </ScrollView>
 
-              {/* Image URL */}
-              <Text style={styles.fieldLabel}>Image URL</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="https://example.com/image.jpg"
-                value={form.image_url}
-                onChangeText={(v) => setForm({ ...form, image_url: v })}
-                autoCapitalize="none"
-                autoCorrect={false}
-                editable={!saving}
-              />
+              {/* Image Upload */}
+              <Text style={styles.fieldLabel}>Product Image</Text>
+              <TouchableOpacity
+                style={[styles.input, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}
+                onPress={async () => {
+                  if (uploading || saving) return;
+                  setUploading(true);
+                  try {
+                    const url = await pickAndUploadImage();
+                    if (url) setForm({ ...form, image_url: url });
+                  } catch (e: any) {
+                    Alert.alert('Upload Error', e.message || 'Failed to upload image');
+                  } finally {
+                    setUploading(false);
+                  }
+                }}
+                disabled={saving || uploading}
+              >
+                <Text
+                  style={form.image_url ? styles.uploadPreviewText : styles.uploadPlaceholder}
+                  numberOfLines={1}
+                >
+                  {uploading
+                    ? 'Uploading…'
+                    : form.image_url
+                    ? 'Image uploaded ✓ (tap to change)'
+                    : 'Tap to upload image from device'}
+                </Text>
+                <ImageIcon size={20} color={colors.neutral[400]} />
+              </TouchableOpacity>
+              {!isCloudinaryConfigured() ? (
+                <Text style={styles.configWarning}>
+                  Cloudinary not configured. Set EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME and EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET in .env
+                </Text>
+              ) : null}
 
               {/* Status */}
               <Text style={styles.fieldLabel}>Status</Text>
@@ -876,6 +902,23 @@ const styles = StyleSheet.create({
   textArea: {
     minHeight: 100,
     textAlignVertical: 'top',
+  },
+  uploadPreviewText: {
+    ...typography.bodySmall,
+    color: colors.success[700],
+    fontWeight: '500',
+    flex: 1,
+  },
+  uploadPlaceholder: {
+    ...typography.body,
+    color: colors.neutral[400],
+    flex: 1,
+  },
+  configWarning: {
+    ...typography.caption,
+    color: colors.warning[600],
+    marginTop: spacing.xs,
+    marginBottom: spacing.sm,
   },
   // Category chips
   categoryRow: {

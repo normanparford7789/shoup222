@@ -507,6 +507,363 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ successCount, failCount, errors });
     }
 
+    // ── GET /merchants — list all merchants with sales stats ──────────
+    if (path === "/merchants" && method === "GET") {
+      const { data: merchants, error } = await supabase
+        .from("profiles")
+        .select("id, full_name, is_active, is_banned, created_at")
+        .eq("role", "merchant")
+        .order("created_at", { ascending: false });
+      if (error) return jsonResponse({ error: error.message }, 500);
+
+      // Fetch emails
+      let emailMap: Record<string, string> = {};
+      if ((merchants || []).length > 0) {
+        const { data: authUsers } = await supabase.auth.admin.listUsers({ perPage: 1000 });
+        for (const u of authUsers?.users ?? []) {
+          emailMap[u.id] = u.email ?? "";
+        }
+      }
+
+      // Fetch sales summary from the view
+      const { data: salesData } = await supabase
+        .from("merchant_sales_summary")
+        .select("*");
+
+      const salesMap: Record<string, any> = {};
+      for (const s of salesData || []) {
+        salesMap[s.merchant_id] = s;
+      }
+
+      // Fetch product counts and order counts
+      const merchantIds = (merchants || []).map((m: any) => m.id);
+      let productCountMap: Record<string, number> = {};
+      let orderCountMap: Record<string, number> = {};
+
+      if (merchantIds.length > 0) {
+        const { data: products } = await supabase
+          .from("products")
+          .select("merchant_id")
+          .in("merchant_id", merchantIds);
+        for (const p of products || []) {
+          productCountMap[p.merchant_id] = (productCountMap[p.merchant_id] || 0) + 1;
+        }
+
+        const { data: orderItems } = await supabase
+          .from("order_items")
+          .select("merchant_id, order_id")
+          .in("merchant_id", merchantIds);
+        for (const oi of orderItems || []) {
+          orderCountMap[oi.merchant_id] = (orderCountMap[oi.merchant_id] || 0) + 1;
+        }
+      }
+
+      const result = (merchants || []).map((m: any) => {
+        const sales = salesMap[m.id];
+        return {
+          id: m.id,
+          full_name: m.full_name,
+          email: emailMap[m.id] ?? "",
+          is_active: m.is_active,
+          is_banned: m.is_banned,
+          created_at: m.created_at,
+          product_count: productCountMap[m.id] || 0,
+          order_count: orderCountMap[m.id] || 0,
+          total_sales: sales?.total_sales ? String(sales.total_sales) : "0",
+          total_earnings: sales?.total_earnings ? String(sales.total_earnings) : "0",
+          pending_earnings: sales?.pending_earnings ? String(sales.pending_earnings) : "0",
+          available_balance: sales?.available_balance ? String(sales.available_balance) : "0",
+        };
+      });
+
+      // Sort by total_sales descending (top sellers first)
+      result.sort((a: any, b: any) => parseFloat(b.total_sales) - parseFloat(a.total_sales));
+
+      return jsonResponse({ merchants: result });
+    }
+
+    // ── GET /merchants/:id — merchant detail ──────────────────────────
+    if (path.match(/^\/merchants\/[^/]+$/) && method === "GET") {
+      const merchantId = path.split("/")[2];
+
+      const { data: merchant, error: mErr } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", merchantId)
+        .maybeSingle();
+      if (mErr || !merchant) return jsonResponse({ error: "Merchant not found" }, 404);
+
+      let email = "";
+      const { data: authUsers } = await supabase.auth.admin.listUsers({ perPage: 1000 });
+      const au = (authUsers?.users ?? []).find((u: any) => u.id === merchantId);
+      if (au) email = au.email ?? "";
+
+      const { data: wallet } = await supabase
+        .from("wallets")
+        .select("*")
+        .eq("user_id", merchantId)
+        .maybeSingle();
+
+      const { data: products } = await supabase
+        .from("products")
+        .select("*, category:categories(name), images:product_images(image_url)")
+        .eq("merchant_id", merchantId)
+        .order("created_at", { ascending: false });
+
+      const { data: orderItems } = await supabase
+        .from("order_items")
+        .select("*, order:orders(*), product:products(name)")
+        .eq("merchant_id", merchantId)
+        .order("created_at", { ascending: false });
+
+      const { data: reels } = await supabase
+        .from("reels")
+        .select("*")
+        .eq("merchant_id", merchantId)
+        .order("created_at", { ascending: false });
+
+      const { data: restrictions } = await supabase
+        .from("merchant_restrictions")
+        .select("*")
+        .eq("merchant_id", merchantId)
+        .maybeSingle();
+
+      // Fetch customer info for orders
+      const orderIds = [...new Set((orderItems || []).map((oi: any) => oi.order?.id).filter(Boolean))];
+      let customerMap: Record<string, any> = {};
+      if (orderIds.length > 0) {
+        const { data: orders } = await supabase
+          .from("orders")
+          .select("id, user_id")
+          .in("id", orderIds);
+        const userIds = [...new Set((orders || []).map((o: any) => o.user_id).filter(Boolean))];
+        if (userIds.length > 0) {
+          const { data: profiles } = await supabase
+            .from("profiles")
+            .select("id, full_name, phone")
+            .in("id", userIds);
+          for (const p of profiles || []) {
+            customerMap[p.id] = p;
+          }
+        }
+      }
+
+      const enrichedOrderItems = (orderItems || []).map((item: any) => ({
+        ...item,
+        order: item.order
+          ? {
+              ...item.order,
+              customer: item.order.user_id ? customerMap[item.order.user_id] ?? null : null,
+            }
+          : null,
+      }));
+
+      // Compute stats
+      const totalSales = (orderItems || []).reduce((sum: number, oi: any) => sum + parseFloat(oi.subtotal || "0"), 0);
+      const totalEarnings = (orderItems || []).reduce((sum: number, oi: any) => sum + parseFloat(oi.merchant_earnings || "0"), 0);
+      const pendingEarnings = (orderItems || [])
+        .filter((oi: any) => oi.hold_until && new Date(oi.hold_until) > new Date())
+        .reduce((sum: number, oi: any) => sum + parseFloat(oi.merchant_earnings || "0"), 0);
+
+      return jsonResponse({
+        merchant: { ...merchant, email },
+        wallet: wallet || null,
+        products: products || [],
+        orderItems: enrichedOrderItems,
+        reels: reels || [],
+        restrictions: restrictions || null,
+        stats: {
+          product_count: products?.length || 0,
+          order_count: orderItems?.length || 0,
+          reel_count: reels?.length || 0,
+          total_sales: totalSales.toFixed(2),
+          total_earnings: totalEarnings.toFixed(2),
+          pending_earnings: pendingEarnings.toFixed(2),
+          available_balance: wallet?.available_balance ? String(wallet.available_balance) : "0",
+          pending_balance: wallet?.pending_balance ? String(wallet.pending_balance) : "0",
+        },
+      });
+    }
+
+    // ── GET /export/users — CSV export of all users ───────────────────
+    if (path === "/export/users" && method === "GET") {
+      const { data: profiles, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (error) return jsonResponse({ error: error.message }, 500);
+
+      let emailMap: Record<string, string> = {};
+      if ((profiles || []).length > 0) {
+        const { data: authUsers } = await supabase.auth.admin.listUsers({ perPage: 1000 });
+        for (const u of authUsers?.users ?? []) {
+          emailMap[u.id] = u.email ?? "";
+        }
+      }
+
+      const csvRows: string[] = [];
+      csvRows.push("Full Name,Email,Role,Phone,Active,Banned,Created At");
+      for (const p of profiles || []) {
+        csvRows.push([
+          escapeCsv(p.full_name || ""),
+          escapeCsv(emailMap[p.id] || ""),
+          escapeCsv(p.role || "customer"),
+          escapeCsv(p.phone || ""),
+          p.is_active ? "Yes" : "No",
+          p.is_banned ? "Yes" : "No",
+          escapeCsv(new Date(p.created_at).toLocaleDateString()),
+        ].join(","));
+      }
+      return csvResponse(csvRows.join("\n"), "admin-users");
+    }
+
+    // ── GET /export/orders — CSV export of all orders ─────────────────
+    if (path === "/export/orders" && method === "GET") {
+      const { data: orders, error } = await supabase
+        .from("orders")
+        .select("*, profile:profiles!user_id(full_name, phone), items:order_items(product_name, quantity, unit_price, subtotal, merchant_earnings)")
+        .order("created_at", { ascending: false });
+      if (error) return jsonResponse({ error: error.message }, 500);
+
+      let emailMap: Record<string, string> = {};
+      const userIds = [...new Set((orders || []).map((o: any) => o.user_id).filter(Boolean))];
+      if (userIds.length > 0) {
+        const { data: authUsers } = await supabase.auth.admin.listUsers({ perPage: 1000 });
+        for (const u of authUsers?.users ?? []) {
+          emailMap[u.id] = u.email ?? "";
+        }
+      }
+
+      const csvRows: string[] = [];
+      csvRows.push("Order Number,Date,Status,Customer Name,Customer Email,Customer Phone,Total,Payment Method,Payment Status,Tracking Number,Items Count");
+      for (const o of orders || []) {
+        const itemCount = (o as any).items?.length || 0;
+        csvRows.push([
+          escapeCsv(o.order_number || ""),
+          escapeCsv(new Date(o.created_at).toLocaleDateString()),
+          escapeCsv(o.status || ""),
+          escapeCsv((o as any).profile?.full_name || ""),
+          escapeCsv(emailMap[o.user_id] || ""),
+          escapeCsv((o as any).profile?.phone || ""),
+          String(o.total || 0),
+          escapeCsv(o.payment_method || ""),
+          escapeCsv(o.payment_status || ""),
+          escapeCsv(o.tracking_number || ""),
+          String(itemCount),
+        ].join(","));
+      }
+      return csvResponse(csvRows.join("\n"), "admin-orders");
+    }
+
+    // ── GET /export/merchants — CSV export of all merchants ───────────
+    if (path === "/export/merchants" && method === "GET") {
+      const { data: merchants, error } = await supabase
+        .from("profiles")
+        .select("id, full_name, is_active, is_banned, created_at")
+        .eq("role", "merchant")
+        .order("created_at", { ascending: false });
+      if (error) return jsonResponse({ error: error.message }, 500);
+
+      let emailMap: Record<string, string> = {};
+      if ((merchants || []).length > 0) {
+        const { data: authUsers } = await supabase.auth.admin.listUsers({ perPage: 1000 });
+        for (const u of authUsers?.users ?? []) {
+          emailMap[u.id] = u.email ?? "";
+        }
+      }
+
+      const { data: salesData } = await supabase.from("merchant_sales_summary").select("*");
+      const salesMap: Record<string, any> = {};
+      for (const s of salesData || []) {
+        salesMap[s.merchant_id] = s;
+      }
+
+      const csvRows: string[] = [];
+      csvRows.push("Merchant Name,Email,Products,Orders,Total Sales,Total Earnings,Pending Earnings,Available Balance,Active,Banned,Created At");
+      for (const m of merchants || []) {
+        const sales = salesMap[m.id];
+        csvRows.push([
+          escapeCsv(m.full_name || ""),
+          escapeCsv(emailMap[m.id] || ""),
+          String(sales?.product_count || 0),
+          String(sales?.order_count || 0),
+          String(sales?.total_sales || 0),
+          String(sales?.total_earnings || 0),
+          String(sales?.pending_earnings || 0),
+          String(sales?.available_balance || 0),
+          m.is_active ? "Yes" : "No",
+          m.is_banned ? "Yes" : "No",
+          escapeCsv(new Date(m.created_at).toLocaleDateString()),
+        ].join(","));
+      }
+      return csvResponse(csvRows.join("\n"), "admin-merchants");
+    }
+
+    // ── GET /export/products — CSV export of all products ─────────────
+    if (path === "/export/products" && method === "GET") {
+      const { data: products, error } = await supabase
+        .from("products")
+        .select("*, category:categories(name), merchant:profiles!merchant_id(full_name)")
+        .order("created_at", { ascending: false });
+      if (error) return jsonResponse({ error: error.message }, 500);
+
+      const productIds = (products || []).map((p: any) => p.id);
+      let imageMap: Record<string, string | null> = {};
+      if (productIds.length > 0) {
+        const { data: images } = await supabase
+          .from("product_images")
+          .select("product_id, image_url, sort_order")
+          .in("product_id", productIds)
+          .order("sort_order", { ascending: true });
+        for (const img of images || []) {
+          if (!imageMap[img.product_id]) imageMap[img.product_id] = img.image_url;
+        }
+      }
+
+      const csvRows: string[] = [];
+      csvRows.push("Name,Price,Category,Merchant,Status,Rating,Review Count,Created At,Image URL");
+      for (const p of products || []) {
+        csvRows.push([
+          escapeCsv(p.name || ""),
+          String(p.price || 0),
+          escapeCsv((p as any).category?.name || ""),
+          escapeCsv((p as any).merchant?.full_name || ""),
+          escapeCsv(p.status || ""),
+          String(p.rating || 0),
+          String(p.review_count || 0),
+          escapeCsv(new Date(p.created_at).toLocaleDateString()),
+          escapeCsv(imageMap[p.id] || ""),
+        ].join(","));
+      }
+      return csvResponse(csvRows.join("\n"), "admin-products");
+    }
+
+    // ── GET /export/withdrawals — CSV export of all withdrawals ───────
+    if (path === "/export/withdrawals" && method === "GET") {
+      const { data: withdrawals, error } = await supabase
+        .from("withdrawal_requests")
+        .select("*, profile:profiles!user_id(full_name, role)")
+        .order("created_at", { ascending: false });
+      if (error) return jsonResponse({ error: error.message }, 500);
+
+      const csvRows: string[] = [];
+      csvRows.push("User Name,Role,Amount,Status,Payment Info,Admin Notes,Invoice Number,Requested At,Processed At");
+      for (const w of withdrawals || []) {
+        csvRows.push([
+          escapeCsv((w as any).profile?.full_name || ""),
+          escapeCsv((w as any).profile?.role || ""),
+          String(w.amount || 0),
+          escapeCsv(w.status || ""),
+          escapeCsv(w.payment_info || ""),
+          escapeCsv(w.admin_notes || ""),
+          escapeCsv(w.invoice_number || ""),
+          escapeCsv(new Date(w.created_at).toLocaleDateString()),
+          w.processed_at ? escapeCsv(new Date(w.processed_at).toLocaleDateString()) : "",
+        ].join(","));
+      }
+      return csvResponse(csvRows.join("\n"), "admin-withdrawals");
+    }
+
     return jsonResponse({ error: "Not found" }, 404);
   } catch (err) {
     return jsonResponse({ error: (err as Error)?.message || "Internal server error" }, 500);
@@ -517,5 +874,24 @@ function jsonResponse(data: any, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+function escapeCsv(value: string): string {
+  if (!value) return "";
+  if (value.includes(",") || value.includes('"') || value.includes("\n")) {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+  return value;
+}
+
+function csvResponse(csv: string, filename: string) {
+  return new Response(csv, {
+    status: 200,
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "text/csv",
+      "Content-Disposition": `attachment; filename="${filename}-${Date.now()}.csv"`,
+    },
   });
 }

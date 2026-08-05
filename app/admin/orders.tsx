@@ -24,10 +24,13 @@ import {
   Calendar,
   Store,
   Megaphone,
+  Download,
+  FileText,
 } from 'lucide-react-native';
 import { colors, spacing, radius, typography, shadows } from '@/lib/theme';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/Button';
+import { downloadCSV, buildCSV, exportPDF, buildHTMLTable } from '@/lib/export';
 
 const ADMIN_API_BASE = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/admin-api`;
 
@@ -44,8 +47,10 @@ type OrderItem = {
 type Order = {
   id: string;
   user_id: string;
+  order_number?: string;
   total: string;
   status: string;
+  payment_status?: string;
   created_at: string;
   affiliate_code: string | null;
   affiliate_user_id: string | null;
@@ -81,6 +86,43 @@ export default function AdminOrdersScreen() {
   const [filterStatus, setFilterStatus] = useState('all');
   const [detailOrder, setDetailOrder] = useState<Order | null>(null);
   const [detailVisible, setDetailVisible] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  const handleExportCSV = useCallback(async () => {
+    if (orders.length === 0) return;
+    setExporting(true);
+    try {
+      const headers = ['Order #', 'Date', 'Status', 'Customer', 'Email', 'Total', 'Payment', 'Items'];
+      const rows = orders.map((o) => [
+        o.order_number ?? o.id.slice(0, 8),
+        new Date(o.created_at).toLocaleDateString(),
+        o.status,
+        o.profile?.full_name ?? 'N/A',
+        o.profile?.email ?? '',
+        `${Number(o.total || 0).toFixed(2)}`,
+        o.payment_status ?? '',
+        String(o.items?.length ?? 0),
+      ]);
+      await downloadCSV(buildCSV(headers, rows), `admin-orders-${Date.now()}`);
+    } finally { setExporting(false); }
+  }, [orders]);
+
+  const handleExportPDF = useCallback(async () => {
+    if (orders.length === 0) return;
+    setExporting(true);
+    try {
+      const headers = ['Order #', 'Date', 'Status', 'Customer', 'Total', 'Items'];
+      const rows = orders.map((o) => [
+        o.order_number ?? o.id.slice(0, 8),
+        new Date(o.created_at).toLocaleDateString(),
+        o.status,
+        o.profile?.full_name ?? 'N/A',
+        `${Number(o.total || 0).toFixed(2)}`,
+        String(o.items?.length ?? 0),
+      ]);
+      await exportPDF(buildHTMLTable('All Orders', `${orders.length} orders`, headers, rows), 'Orders Report');
+    } finally { setExporting(false); }
+  }, [orders]);
 
   const getAuthHeaders = async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -160,7 +202,14 @@ export default function AdminOrdersScreen() {
           <ChevronLeft size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.title}>All Orders</Text>
-        <View style={{ width: 40 }} />
+        <View style={styles.headerRight}>
+          <TouchableOpacity style={styles.iconBtn} onPress={handleExportCSV} disabled={exporting || orders.length === 0}>
+            <Download size={20} color={colors.primary[600]} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.iconBtn} onPress={handleExportPDF} disabled={exporting || orders.length === 0}>
+            <FileText size={20} color={colors.primary[600]} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Search */}
@@ -354,6 +403,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md, paddingVertical: spacing.md, backgroundColor: colors.surface,
   },
   iconBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  headerRight: { flexDirection: 'row', gap: 4 },
   title: { ...typography.h4, color: colors.text, fontWeight: '700' },
   centerContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md },
   loadingText: { ...typography.body, color: colors.textSecondary },

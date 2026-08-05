@@ -24,11 +24,13 @@ import {
   Heart,
   MessageCircle,
   Shield,
+  Image as ImageIcon,
 } from 'lucide-react-native';
 import { colors, spacing, radius, typography, shadows } from '@/lib/theme';
 import { useAuth } from '@/lib/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/Button';
+import { pickAndUploadImage, pickAndUploadVideo, isCloudinaryConfigured } from '@/lib/cloudinary';
 import type { Reel, Product } from '@/lib/supabase';
 
 type ReelWithProduct = Reel & {
@@ -63,6 +65,8 @@ export default function MerchantReelsScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [uploadingVideo, setUploadingVideo] = useState(false);
+  const [uploadingThumb, setUploadingThumb] = useState(false);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -367,17 +371,72 @@ export default function MerchantReelsScreen() {
                 editable={!saving}
               />
 
-              {/* Video URL */}
-              <Text style={styles.fieldLabel}>Video URL *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="https://example.com/video.mp4"
-                value={form.video_url}
-                onChangeText={(v) => setForm({ ...form, video_url: v })}
-                autoCapitalize="none"
-                autoCorrect={false}
-                editable={!saving}
-              />
+              {/* Video Upload */}
+              <Text style={styles.fieldLabel}>Video File *</Text>
+              <TouchableOpacity
+                style={[styles.input, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}
+                onPress={async () => {
+                  if (uploadingVideo || saving) return;
+                  setUploadingVideo(true);
+                  try {
+                    const url = await pickAndUploadVideo();
+                    if (url) setForm({ ...form, video_url: url });
+                  } catch (e: any) {
+                    Alert.alert('Upload Error', e.message || 'Failed to upload video');
+                  } finally {
+                    setUploadingVideo(false);
+                  }
+                }}
+                disabled={saving || uploadingVideo}
+              >
+                <Text
+                  style={form.video_url ? styles.uploadPreviewText : styles.uploadPlaceholder}
+                  numberOfLines={1}
+                >
+                  {uploadingVideo
+                    ? 'Uploading video…'
+                    : form.video_url
+                    ? 'Video uploaded ✓ (tap to change)'
+                    : 'Tap to upload video from device'}
+                </Text>
+                <Video size={20} color={colors.neutral[400]} />
+              </TouchableOpacity>
+
+              {/* Thumbnail Upload */}
+              <Text style={styles.fieldLabel}>Thumbnail Image</Text>
+              <TouchableOpacity
+                style={[styles.input, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}
+                onPress={async () => {
+                  if (uploadingThumb || saving) return;
+                  setUploadingThumb(true);
+                  try {
+                    const url = await pickAndUploadImage();
+                    if (url) setForm({ ...form, thumbnail_url: url });
+                  } catch (e: any) {
+                    Alert.alert('Upload Error', e.message || 'Failed to upload thumbnail');
+                  } finally {
+                    setUploadingThumb(false);
+                  }
+                }}
+                disabled={saving || uploadingThumb}
+              >
+                <Text
+                  style={form.thumbnail_url ? styles.uploadPreviewText : styles.uploadPlaceholder}
+                  numberOfLines={1}
+                >
+                  {uploadingThumb
+                    ? 'Uploading thumbnail…'
+                    : form.thumbnail_url
+                    ? 'Thumbnail uploaded ✓ (tap to change)'
+                    : 'Tap to upload thumbnail from device'}
+                </Text>
+                <ImageIcon size={20} color={colors.neutral[400]} />
+              </TouchableOpacity>
+              {!isCloudinaryConfigured() ? (
+                <Text style={styles.configWarning}>
+                  Cloudinary not configured. Set EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME and EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET in .env
+                </Text>
+              ) : null}
 
               {/* Thumbnail URL */}
               <Text style={styles.fieldLabel}>Thumbnail URL</Text>
@@ -699,6 +758,23 @@ const styles = StyleSheet.create({
   textArea: {
     minHeight: 80,
     textAlignVertical: 'top',
+  },
+  uploadPreviewText: {
+    ...typography.bodySmall,
+    color: colors.success[700],
+    fontWeight: '500',
+    flex: 1,
+  },
+  uploadPlaceholder: {
+    ...typography.body,
+    color: colors.neutral[400],
+    flex: 1,
+  },
+  configWarning: {
+    ...typography.caption,
+    color: colors.warning[600],
+    marginTop: spacing.xs,
+    marginBottom: spacing.sm,
   },
   // No products
   noProductsBox: {
