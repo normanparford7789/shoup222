@@ -13,6 +13,9 @@ import {
   Alert,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const WEBSITE_URL = 'https://shoup222-production.up.railway.app';
 import {
   ChevronLeft,
   Heart,
@@ -39,7 +42,7 @@ import type { Product, ProductVariant, Review, AffiliateLink } from '@/lib/supab
 const { width } = Dimensions.get('window');
 
 export default function ProductDetailScreen() {
-  const { slug } = useLocalSearchParams<{ slug: string }>();
+  const { slug, ref } = useLocalSearchParams<{ slug: string; ref?: string }>();
   const { user, profile, isPublisher } = useAuth();
   const { addToCart } = useCart();
   const { isWishlisted, toggle } = useWishlist();
@@ -85,6 +88,17 @@ export default function ProductDetailScreen() {
     setVariants((variantsRes.data as ProductVariant[]) ?? []);
     setReviews((reviewsRes.data as Review[]) ?? []);
     setRelated((relatedRes.data as Product[]) ?? []);
+
+    // Track affiliate click if visitor arrived via affiliate link
+    if (ref) {
+      try {
+        await AsyncStorage.setItem('affiliate_ref', ref);
+        await supabase.rpc('track_affiliate_click', {
+          p_affiliate_code: ref,
+          p_user_id: user?.id ?? null,
+        });
+      } catch {}
+    }
 
     // Load affiliate link for publishers
     if (user && profile?.role === 'publisher') {
@@ -405,7 +419,7 @@ export default function ProductDetailScreen() {
                   <View>
                     <Text style={styles.affiliateUrlLabel}>Your Affiliate Link</Text>
                     <Text style={styles.affiliateUrl} selectable>
-                      {process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/affiliate-redirect?code={affiliateLink.affiliate_code}
+                      {WEBSITE_URL}/product/{product.slug}?ref={affiliateLink.affiliate_code}
                     </Text>
                     <View style={styles.affiliateStats}>
                       <View style={styles.affiliateStat}>

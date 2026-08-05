@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { router } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   ChevronLeft,
   MapPin,
@@ -116,6 +117,21 @@ export default function CheckoutScreen() {
     }
     setPlacing(true);
     try {
+      // Retrieve stored affiliate ref code (if visitor came via affiliate link)
+      let affiliateCode: string | null = null;
+      let affiliateUserId: string | null = null;
+      try {
+        affiliateCode = await AsyncStorage.getItem('affiliate_ref');
+        if (affiliateCode) {
+          const { data: affLink } = await supabase
+            .from('affiliate_links')
+            .select('user_id')
+            .eq('affiliate_code', affiliateCode)
+            .maybeSingle();
+          affiliateUserId = affLink?.user_id ?? null;
+        }
+      } catch {}
+
       const orderNumber = `ORD-${Date.now().toString().slice(-8)}`;
       const invoiceNumber = `INV-${Date.now().toString().slice(-10)}`;
       const shippingInfo = {
@@ -142,6 +158,8 @@ export default function CheckoutScreen() {
           shipping_address: shippingInfo,
           payment_method: paymentMethod,
           payment_status: paymentMethod === 'wallet' ? 'partial' : 'unpaid',
+          affiliate_code: affiliateCode,
+          affiliate_user_id: affiliateUserId,
         })
         .select()
         .single();
@@ -204,6 +222,8 @@ export default function CheckoutScreen() {
       });
 
       await clearCart();
+      // Clear stored affiliate ref after order is placed
+      if (affiliateCode) { try { await AsyncStorage.removeItem('affiliate_ref'); } catch {} }
       Alert.alert(
         'Order Placed!',
         `Order ${orderNumber} placed.\n25% upfront: $${upfrontAmount.toFixed(2)}\nDue on delivery: $${remainingAmount.toFixed(2)}\nInvoice: ${invoiceNumber}`,
