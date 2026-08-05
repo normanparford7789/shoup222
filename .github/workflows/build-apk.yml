@@ -18,7 +18,7 @@ jobs:
 
       - name: Link project
         run: |
-          supabase link --project-ref "dmzmsgolisgcvbfaekby"
+          supabase link --project-ref "dmzmsgolisgcvbfaekby" --debug
         env:
           SUPABASE_ACCESS_TOKEN: "sbp_b53344bf6d6d8028d79ea85f6ca12ec950dab178"
 
