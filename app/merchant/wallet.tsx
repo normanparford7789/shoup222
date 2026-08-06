@@ -3,29 +3,25 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   SafeAreaView,
   RefreshControl,
   ActivityIndicator,
-  Modal,
-  TextInput,
-  Alert,
   FlatList,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import {
   ChevronLeft,
-  Wallet,
+  BarChart3,
   Shield,
   ArrowDownCircle,
   ArrowUpCircle,
   Clock,
   Check,
-  X,
-  DollarSign,
   TrendingUp,
   Banknote,
+  DollarSign,
+  ShoppingBag,
 } from 'lucide-react-native';
 import { colors, spacing, radius, typography, shadows } from '@/lib/theme';
 import { useAuth } from '@/lib/AuthContext';
@@ -59,7 +55,7 @@ const TX_TYPE_CONFIG: Record<
     sign: '+',
   },
   pending_release: {
-    label: 'Pending Release',
+    label: 'Earnings Released',
     icon: <Check size={18} color={colors.success[600]} />,
     color: colors.success[600],
     bg: colors.success[50],
@@ -88,9 +84,7 @@ const TX_STATUS_CONFIG: Record<string, { label: string; color: string; bg: strin
   cancelled: { label: 'Cancelled', color: colors.neutral[500], bg: colors.neutral[100] },
 };
 
-const MIN_WITHDRAWAL = 20;
-
-export default function MerchantWalletScreen() {
+export default function MerchantEarningsScreen() {
   const { user, isMerchant } = useAuth();
   const [wallet, setWallet] = useState<WalletType | null>(null);
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
@@ -98,19 +92,10 @@ export default function MerchantWalletScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Withdrawal modal
-  const [withdrawModal, setWithdrawModal] = useState(false);
-  const [withdrawAmount, setWithdrawAmount] = useState('');
-  const [paymentInfo, setPaymentInfo] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-
   const load = useCallback(async () => {
     if (!user) return;
     setError(null);
     try {
-      // Release any matured pending earnings first
-      try { await supabase.rpc('release_pending_earnings'); } catch {}
-
       const [walletRes, txRes] = await Promise.all([
         supabase
           .from('wallets')
@@ -131,7 +116,7 @@ export default function MerchantWalletScreen() {
       setWallet((walletRes.data as WalletType) ?? null);
       setTransactions((txRes.data as WalletTransaction[]) ?? []);
     } catch (e: any) {
-      setError(e.message || 'Failed to load wallet');
+      setError(e.message || 'Failed to load earnings');
     }
   }, [user]);
 
@@ -156,60 +141,6 @@ export default function MerchantWalletScreen() {
       month: 'short',
       day: 'numeric',
     });
-
-  const openWithdraw = () => {
-    setWithdrawAmount('');
-    setPaymentInfo('');
-    setWithdrawModal(true);
-  };
-
-  const handleWithdraw = async () => {
-    if (!user) return;
-    const amount = parseFloat(withdrawAmount);
-
-    if (isNaN(amount) || amount <= 0) {
-      Alert.alert('Invalid Amount', 'Please enter a valid amount.');
-      return;
-    }
-    if (amount < MIN_WITHDRAWAL) {
-      Alert.alert('Minimum Withdrawal', `Minimum withdrawal amount is $${MIN_WITHDRAWAL}.00.`);
-      return;
-    }
-    if (wallet && amount > wallet.available_balance) {
-      Alert.alert('Insufficient Balance', 'You do not have enough available balance.');
-      return;
-    }
-    if (!paymentInfo.trim()) {
-      Alert.alert('Payment Info Required', 'Please provide your payment information.');
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      const invoiceNumber = `INV-${Date.now()}`;
-
-      const { error: insertErr } = await supabase.from('withdrawal_requests').insert({
-        user_id: user.id,
-        amount,
-        payment_info: paymentInfo.trim(),
-        status: 'pending',
-        invoice_number: invoiceNumber,
-      });
-
-      if (insertErr) throw insertErr;
-
-      Alert.alert(
-        'Withdrawal Requested',
-        `Your withdrawal of ${fmtMoney(amount)} has been submitted.\nInvoice: ${invoiceNumber}`,
-        [{ text: 'OK', onPress: () => setWithdrawModal(false) }]
-      );
-      await load();
-    } catch (e: any) {
-      Alert.alert('Error', e.message || 'Failed to submit withdrawal request');
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   const renderTransaction = ({ item }: { item: WalletTransaction }) => {
     const cfg = TX_TYPE_CONFIG[item.type] ?? TX_TYPE_CONFIG.adjustment;
@@ -248,14 +179,14 @@ export default function MerchantWalletScreen() {
           <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
             <ChevronLeft size={24} color={colors.text} />
           </TouchableOpacity>
-          <Text style={styles.title}>Wallet</Text>
+          <Text style={styles.title}>Earnings</Text>
           <View style={{ width: 40 }} />
         </View>
         <View style={styles.accessGuard}>
           <Shield size={64} color={colors.neutral[300]} />
           <Text style={styles.accessTitle}>Merchant Access Required</Text>
           <Text style={styles.accessMsg}>
-            You need merchant privileges to access the wallet.
+            You need merchant privileges to view earnings.
           </Text>
           <View style={{ marginTop: spacing.lg, width: '100%' }}>
             <Button title="Back to Home" onPress={() => router.replace('/(tabs)/index')} fullWidth />
@@ -265,7 +196,6 @@ export default function MerchantWalletScreen() {
     );
   }
 
-  // ── Loading ────────────────────────────────────────────────────
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -273,18 +203,17 @@ export default function MerchantWalletScreen() {
           <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
             <ChevronLeft size={24} color={colors.text} />
           </TouchableOpacity>
-          <Text style={styles.title}>Wallet</Text>
+          <Text style={styles.title}>Earnings</Text>
           <View style={{ width: 40 }} />
         </View>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary[600]} />
-          <Text style={styles.loadingText}>Loading wallet…</Text>
+          <Text style={styles.loadingText}>Loading earnings…</Text>
         </View>
       </SafeAreaView>
     );
   }
 
-  // ── Error ──────────────────────────────────────────────────────
   if (error && !wallet) {
     return (
       <SafeAreaView style={styles.container}>
@@ -292,7 +221,7 @@ export default function MerchantWalletScreen() {
           <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
             <ChevronLeft size={24} color={colors.text} />
           </TouchableOpacity>
-          <Text style={styles.title}>Wallet</Text>
+          <Text style={styles.title}>Earnings</Text>
           <View style={{ width: 40 }} />
         </View>
         <View style={styles.errorContainer}>
@@ -307,11 +236,37 @@ export default function MerchantWalletScreen() {
     );
   }
 
-  const available = wallet?.available_balance ?? 0;
-  const pending = wallet?.pending_balance ?? 0;
   const totalEarned = wallet?.total_earned ?? 0;
   const totalWithdrawn = wallet?.total_withdrawn ?? 0;
-  const canWithdraw = available >= MIN_WITHDRAWAL;
+  const currentBalance = wallet?.available_balance ?? 0;
+  const creditTxCount = transactions.filter(t => t.type === 'credit' || t.type === 'pending_release').length;
+
+  const statsCards = [
+    {
+      label: 'Total Earned',
+      value: fmtMoney(totalEarned),
+      icon: <TrendingUp size={20} color={colors.success[700]} />,
+      iconBg: colors.success[100],
+    },
+    {
+      label: 'Current Balance',
+      value: fmtMoney(currentBalance),
+      icon: <DollarSign size={20} color={colors.primary[700]} />,
+      iconBg: colors.primary[100],
+    },
+    {
+      label: 'Total Paid Out',
+      value: fmtMoney(totalWithdrawn),
+      icon: <Banknote size={20} color={colors.neutral[600]} />,
+      iconBg: colors.neutral[100],
+    },
+    {
+      label: 'Earning Events',
+      value: String(creditTxCount),
+      icon: <ShoppingBag size={20} color={colors.accent[600]} />,
+      iconBg: colors.accent[100],
+    },
+  ];
 
   return (
     <SafeAreaView style={styles.container}>
@@ -319,7 +274,7 @@ export default function MerchantWalletScreen() {
         <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
           <ChevronLeft size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>Wallet</Text>
+        <Text style={styles.title}>Earnings</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -337,161 +292,42 @@ export default function MerchantWalletScreen() {
               </View>
             ) : null}
 
-            {/* Balance hero card */}
-            <View style={styles.balanceCard}>
-              <View style={styles.balanceHeader}>
-                <View style={styles.balanceIconWrap}>
-                  <Wallet size={22} color={colors.white} />
-                </View>
-                <Text style={styles.balanceTitle}>Available Balance</Text>
+            {/* Earnings hero */}
+            <View style={styles.heroCard}>
+              <View style={styles.heroIconWrap}>
+                <BarChart3 size={28} color={colors.white} />
               </View>
-              <Text style={styles.balanceTotal}>{fmtMoney(available)}</Text>
-              <View style={styles.balanceSubRow}>
-                <View style={styles.balanceSubItem}>
-                  <View style={[styles.balanceDot, { backgroundColor: colors.warning[500] }]} />
-                  <Text style={styles.balanceSubLabel}>Pending</Text>
-                  <Text style={styles.balanceSubValue}>{fmtMoney(pending)}</Text>
-                </View>
-                <View style={styles.balanceSubDivider} />
-                <View style={styles.balanceSubItem}>
-                  <View style={[styles.balanceDot, { backgroundColor: colors.success[500] }]} />
-                  <Text style={styles.balanceSubLabel}>Total</Text>
-                  <Text style={styles.balanceSubValue}>{fmtMoney(available + pending)}</Text>
-                </View>
-              </View>
-              <View style={{ marginTop: spacing.md }}>
-                <Button
-                  title="Request Withdrawal"
-                  onPress={openWithdraw}
-                  disabled={!canWithdraw}
-                  fullWidth
-                />
-                {!canWithdraw ? (
-                  <Text style={styles.withdrawNote}>
-                    Minimum $20.00 available balance required to withdraw.
-                  </Text>
-                ) : null}
-              </View>
+              <Text style={styles.heroLabel}>EARNINGS OVERVIEW</Text>
+              <Text style={styles.heroValue}>{fmtMoney(totalEarned)}</Text>
+              <Text style={styles.heroSub}>Lifetime earnings from sales</Text>
             </View>
 
-            {/* Stats row */}
-            <View style={styles.statsRow}>
-              <View style={styles.statCard}>
-                <View style={[styles.statIcon, { backgroundColor: colors.success[100] }]}>
-                  <TrendingUp size={18} color={colors.success[700]} />
+            {/* Stats grid */}
+            <View style={styles.statsGrid}>
+              {statsCards.map((card, idx) => (
+                <View key={idx} style={styles.statCard}>
+                  <View style={[styles.statIcon, { backgroundColor: card.iconBg }]}>
+                    {card.icon}
+                  </View>
+                  <Text style={styles.statValue}>{card.value}</Text>
+                  <Text style={styles.statLabel}>{card.label}</Text>
                 </View>
-                <Text style={styles.statValue}>{fmtMoney(totalEarned)}</Text>
-                <Text style={styles.statLabel}>Total Earned</Text>
-              </View>
-              <View style={styles.statCard}>
-                <View style={[styles.statIcon, { backgroundColor: colors.primary[100] }]}>
-                  <Banknote size={18} color={colors.primary[700]} />
-                </View>
-                <Text style={styles.statValue}>{fmtMoney(totalWithdrawn)}</Text>
-                <Text style={styles.statLabel}>Total Withdrawn</Text>
-              </View>
+              ))}
             </View>
 
-            {/* Transactions header */}
-            <Text style={styles.sectionTitle}>Recent Transactions</Text>
+            <Text style={styles.sectionTitle}>Transaction History</Text>
           </View>
         }
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <Wallet size={56} color={colors.neutral[300]} />
+            <BarChart3 size={56} color={colors.neutral[300]} />
             <Text style={styles.emptyTitle}>No transactions yet</Text>
             <Text style={styles.emptyMsg}>
-              Your earnings and withdrawals will appear here.
+              Your earnings from product sales will appear here.
             </Text>
           </View>
         }
       />
-
-      {/* ── Withdraw Modal ────────────────────────────────────────── */}
-      <Modal
-        visible={withdrawModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => !submitting && setWithdrawModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Request Withdrawal</Text>
-              <TouchableOpacity
-                style={styles.modalClose}
-                onPress={() => !submitting && setWithdrawModal(false)}
-              >
-                <X size={20} color={colors.neutral[500]} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false}>
-              {/* Available balance display */}
-              <View style={styles.availableBox}>
-                <Text style={styles.availableLabel}>Available Balance</Text>
-                <Text style={styles.availableValue}>{fmtMoney(available)}</Text>
-              </View>
-
-              {/* Amount */}
-              <Text style={styles.fieldLabel}>Amount ($) *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder={`Minimum $${MIN_WITHDRAWAL}.00`}
-                value={withdrawAmount}
-                onChangeText={setWithdrawAmount}
-                keyboardType="decimal-pad"
-                editable={!submitting}
-              />
-              <Text style={styles.fieldHint}>
-                Minimum withdrawal: ${MIN_WITHDRAWAL}.00
-              </Text>
-
-              {/* Payment Info */}
-              <Text style={styles.fieldLabel}>Payment Information *</Text>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                placeholder="Enter your bank details, PayPal, or other payment info…"
-                value={paymentInfo}
-                onChangeText={setPaymentInfo}
-                multiline
-                numberOfLines={4}
-                textAlignVertical="top"
-                editable={!submitting}
-              />
-
-              {/* Warning */}
-              <View style={styles.warningBox}>
-                <Text style={styles.warningText}>
-                  Your withdrawal will be reviewed by our admin team. Funds will be deducted from
-                  your available balance once approved and paid.
-                </Text>
-              </View>
-
-              {/* Actions */}
-              <View style={styles.modalActions}>
-                <View style={{ flex: 1 }}>
-                  <Button
-                    title="Cancel"
-                    onPress={() => setWithdrawModal(false)}
-                    variant="outline"
-                    disabled={submitting}
-                    fullWidth
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Button
-                    title="Submit Request"
-                    onPress={handleWithdraw}
-                    loading={submitting}
-                    fullWidth
-                  />
-                </View>
-              </View>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 }
@@ -521,7 +357,6 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontWeight: '700',
   },
-  // Loading
   loadingContainer: {
     flex: 1,
     alignItems: 'center',
@@ -532,7 +367,6 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.textSecondary,
   },
-  // Access guard
   accessGuard: {
     flex: 1,
     alignItems: 'center',
@@ -550,7 +384,6 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
   },
-  // Error
   errorContainer: {
     flex: 1,
     alignItems: 'center',
@@ -581,82 +414,51 @@ const styles = StyleSheet.create({
     ...typography.bodySmall,
     color: colors.error[700],
   },
-  // Balance card
-  balanceCard: {
-    backgroundColor: colors.surface,
+  // Hero card
+  heroCard: {
+    backgroundColor: colors.primary[600],
     borderRadius: radius.lg,
-    padding: spacing.lg,
+    padding: spacing.xl,
     marginBottom: spacing.md,
+    alignItems: 'center',
     ...shadows.md,
   },
-  balanceHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  balanceIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.primary[600],
+  heroIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: spacing.sm,
   },
-  balanceTitle: {
-    ...typography.bodySmall,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    textTransform: 'uppercase',
+  heroLabel: {
+    ...typography.caption,
+    color: 'rgba(255,255,255,0.75)',
+    fontWeight: '700',
+    letterSpacing: 1,
+    marginBottom: spacing.xs ?? 4,
   },
-  balanceTotal: {
+  heroValue: {
     ...typography.h1,
-    color: colors.text,
-    fontWeight: '700',
-    marginBottom: spacing.md,
-  },
-  balanceSubRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.background,
-    borderRadius: radius.md,
-    padding: spacing.md,
-  },
-  balanceSubItem: { flex: 1, gap: 4 },
-  balanceSubDivider: {
-    width: 1,
-    height: 40,
-    backgroundColor: colors.border,
-    marginHorizontal: spacing.md,
-  },
-  balanceDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  balanceSubLabel: {
-    ...typography.caption,
-    color: colors.textSecondary,
-  },
-  balanceSubValue: {
-    ...typography.h4,
-    color: colors.text,
+    color: colors.white,
     fontWeight: '700',
   },
-  withdrawNote: {
-    ...typography.caption,
-    color: colors.warning[600],
-    textAlign: 'center',
-    marginTop: spacing.sm,
+  heroSub: {
+    ...typography.bodySmall,
+    color: 'rgba(255,255,255,0.7)',
+    marginTop: 4,
   },
-  // Stats row
-  statsRow: {
+  // Stats grid
+  statsGrid: {
     flexDirection: 'row',
-    gap: spacing.md,
+    flexWrap: 'wrap',
+    gap: spacing.sm,
     marginBottom: spacing.lg,
   },
   statCard: {
-    flex: 1,
+    width: '47%',
+    flexGrow: 1,
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
     padding: spacing.md,
@@ -680,14 +482,12 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginTop: 2,
   },
-  // Section
   sectionTitle: {
     ...typography.h4,
     color: colors.text,
     fontWeight: '700',
     marginBottom: spacing.md,
   },
-  // Empty
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -753,108 +553,5 @@ const styles = StyleSheet.create({
   txAmount: {
     ...typography.h4,
     fontWeight: '700',
-  },
-  // Modal
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: colors.overlay,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing.lg,
-  },
-  modalContent: {
-    width: '100%',
-    maxWidth: 440,
-    maxHeight: '90%',
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-    ...shadows.lg,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.md,
-  },
-  modalTitle: {
-    ...typography.h4,
-    color: colors.text,
-    fontWeight: '700',
-  },
-  modalClose: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.neutral[100],
-  },
-  // Available box
-  availableBox: {
-    backgroundColor: colors.primary[50],
-    borderRadius: radius.md,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    alignItems: 'center',
-  },
-  availableLabel: {
-    ...typography.caption,
-    fontWeight: '600',
-    color: colors.primary[700],
-    textTransform: 'uppercase',
-  },
-  availableValue: {
-    ...typography.h2,
-    color: colors.primary[700],
-    fontWeight: '700',
-    marginTop: 4,
-  },
-  // Form fields
-  fieldLabel: {
-    ...typography.bodySmall,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: spacing.sm,
-    marginTop: spacing.sm,
-  },
-  fieldHint: {
-    ...typography.caption,
-    color: colors.neutral[400],
-    marginBottom: spacing.sm,
-  },
-  input: {
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    ...typography.body,
-    color: colors.text,
-    backgroundColor: colors.background,
-  },
-  textArea: {
-    minHeight: 100,
-    textAlignVertical: 'top',
-  },
-  // Warning
-  warningBox: {
-    backgroundColor: colors.warning[50],
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    marginTop: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.warning[100],
-  },
-  warningText: {
-    ...typography.caption,
-    color: colors.warning[600],
-  },
-  // Modal actions
-  modalActions: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    marginTop: spacing.lg,
   },
 });

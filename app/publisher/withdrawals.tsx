@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   SafeAreaView,
   RefreshControl,
@@ -20,6 +19,9 @@ import {
   X,
   Banknote,
   Calendar,
+  Smartphone,
+  Building2,
+  Settings,
 } from 'lucide-react-native';
 import { colors, spacing, radius, typography, shadows } from '@/lib/theme';
 import { useAuth } from '@/lib/AuthContext';
@@ -32,13 +34,13 @@ const STATUS_CONFIG: Record<
   { label: string; color: string; bg: string; icon: React.ReactNode }
 > = {
   pending: {
-    label: 'Pending',
+    label: 'Pending Review',
     color: colors.warning[600],
     bg: colors.warning[50],
     icon: <Clock size={12} color={colors.warning[600]} />,
   },
   approved: {
-    label: 'Approved',
+    label: 'Processing',
     color: colors.primary[600],
     bg: colors.primary[50],
     icon: <Check size={12} color={colors.primary[600]} />,
@@ -63,7 +65,97 @@ const STATUS_CONFIG: Record<
   },
 };
 
-export default function PublisherWithdrawalsScreen() {
+const METHOD_LABELS: Record<string, string> = {
+  sham_cash: 'شام كاش',
+  syriatel_cash: 'سيريتيل كاش',
+  bank: 'تحويل بنكي',
+};
+
+function parsePaymentInfo(raw: string): { method: string; details: Record<string, string> } {
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object') {
+      const { method, ...details } = parsed;
+      return { method: method ?? '', details };
+    }
+  } catch {}
+  // Legacy plain-text fallback
+  return { method: '', details: { info: raw } };
+}
+
+function PaymentMethodDisplay({ raw }: { raw: string }) {
+  const { method, details } = parsePaymentInfo(raw);
+  const label = METHOD_LABELS[method] ?? method;
+  const isBank = method === 'bank';
+
+  return (
+    <View style={payStyles.container}>
+      <View style={payStyles.methodRow}>
+        {isBank ? (
+          <Building2 size={14} color={colors.primary[600]} />
+        ) : (
+          <Smartphone size={14} color={colors.primary[600]} />
+        )}
+        <Text style={payStyles.methodLabel}>{label || 'Payment Info'}</Text>
+      </View>
+      {Object.entries(details).map(([key, val]) => (
+        <View key={key} style={payStyles.detailRow}>
+          <Text style={payStyles.detailKey}>
+            {key === 'phone'
+              ? 'Phone'
+              : key === 'bank_name'
+              ? 'Bank'
+              : key === 'account_number'
+              ? 'Account No.'
+              : key === 'account_holder'
+              ? 'Account Holder'
+              : key === 'info'
+              ? 'Info'
+              : key}
+          </Text>
+          <Text style={payStyles.detailVal}>{String(val)}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+const payStyles = StyleSheet.create({
+  container: {
+    backgroundColor: colors.background,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginTop: spacing.sm,
+  },
+  methodRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: spacing.sm,
+  },
+  methodLabel: {
+    ...typography.caption,
+    fontWeight: '700',
+    color: colors.primary[700],
+    textTransform: 'uppercase',
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 3,
+  },
+  detailKey: {
+    ...typography.caption,
+    color: colors.textSecondary,
+  },
+  detailVal: {
+    ...typography.caption,
+    color: colors.text,
+    fontWeight: '600',
+  },
+});
+
+export default function PublisherPaymentHistoryScreen() {
   const { user, isPublisher } = useAuth();
   const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -83,7 +175,7 @@ export default function PublisherWithdrawalsScreen() {
       if (fetchErr) throw fetchErr;
       setWithdrawals((data as WithdrawalRequest[]) ?? []);
     } catch (e: any) {
-      setError(e.message || 'Failed to load withdrawals');
+      setError(e.message || 'Failed to load payment history');
     }
   }, [user]);
 
@@ -141,19 +233,19 @@ export default function PublisherWithdrawalsScreen() {
           </View>
         ) : null}
 
-        {/* Payment info */}
-        <View style={styles.paymentInfoBox}>
-          <Text style={styles.paymentInfoLabel}>Payment Info</Text>
-          <Text style={styles.paymentInfoValue}>
-            {item.payment_info || 'No payment info provided'}
-          </Text>
-        </View>
+        {/* Payment method display */}
+        {item.payment_info ? (
+          <>
+            <Text style={styles.paymentInfoTitle}>Payment Method</Text>
+            <PaymentMethodDisplay raw={item.payment_info} />
+          </>
+        ) : null}
 
         {/* Admin notes */}
         {item.admin_notes ? (
-          <View style={[styles.paymentInfoBox, { backgroundColor: colors.neutral[50] }]}>
-            <Text style={styles.paymentInfoLabel}>Admin Notes</Text>
-            <Text style={styles.paymentInfoValue}>{item.admin_notes}</Text>
+          <View style={styles.notesBox}>
+            <Text style={styles.notesLabel}>Note from Admin</Text>
+            <Text style={styles.notesValue}>{item.admin_notes}</Text>
           </View>
         ) : null}
 
@@ -175,14 +267,14 @@ export default function PublisherWithdrawalsScreen() {
           <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
             <ChevronLeft size={24} color={colors.text} />
           </TouchableOpacity>
-          <Text style={styles.title}>Withdrawals</Text>
+          <Text style={styles.title}>Payment History</Text>
           <View style={{ width: 40 }} />
         </View>
         <View style={styles.accessGuard}>
           <Shield size={64} color={colors.neutral[300]} />
           <Text style={styles.accessTitle}>Publisher Access Required</Text>
           <Text style={styles.accessMsg}>
-            You need publisher privileges to view withdrawals.
+            You need publisher privileges to view payment history.
           </Text>
           <View style={{ marginTop: spacing.lg, width: '100%' }}>
             <Button title="Back to Home" onPress={() => router.replace('/(tabs)/index')} fullWidth />
@@ -192,7 +284,6 @@ export default function PublisherWithdrawalsScreen() {
     );
   }
 
-  // ── Loading ────────────────────────────────────────────────────
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -200,18 +291,17 @@ export default function PublisherWithdrawalsScreen() {
           <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
             <ChevronLeft size={24} color={colors.text} />
           </TouchableOpacity>
-          <Text style={styles.title}>Withdrawals</Text>
+          <Text style={styles.title}>Payment History</Text>
           <View style={{ width: 40 }} />
         </View>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary[600]} />
-          <Text style={styles.loadingText}>Loading withdrawals…</Text>
+          <Text style={styles.loadingText}>Loading payment history…</Text>
         </View>
       </SafeAreaView>
     );
   }
 
-  // ── Error ──────────────────────────────────────────────────────
   if (error && withdrawals.length === 0) {
     return (
       <SafeAreaView style={styles.container}>
@@ -219,7 +309,7 @@ export default function PublisherWithdrawalsScreen() {
           <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
             <ChevronLeft size={24} color={colors.text} />
           </TouchableOpacity>
-          <Text style={styles.title}>Withdrawals</Text>
+          <Text style={styles.title}>Payment History</Text>
           <View style={{ width: 40 }} />
         </View>
         <View style={styles.errorContainer}>
@@ -234,12 +324,11 @@ export default function PublisherWithdrawalsScreen() {
     );
   }
 
-  // Summary
-  const totalPending = withdrawals
-    .filter((w) => w.status === 'pending' || w.status === 'approved')
-    .reduce((sum, w) => sum + w.amount, 0);
   const totalPaid = withdrawals
     .filter((w) => w.status === 'paid')
+    .reduce((sum, w) => sum + w.amount, 0);
+  const totalInProcess = withdrawals
+    .filter((w) => w.status === 'pending' || w.status === 'approved')
     .reduce((sum, w) => sum + w.amount, 0);
 
   return (
@@ -248,7 +337,7 @@ export default function PublisherWithdrawalsScreen() {
         <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
           <ChevronLeft size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>Withdrawals</Text>
+        <Text style={styles.title}>Payment History</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -272,7 +361,7 @@ export default function PublisherWithdrawalsScreen() {
                   <View style={[styles.summaryIcon, { backgroundColor: colors.warning[100] }]}>
                     <Clock size={18} color={colors.warning[600]} />
                   </View>
-                  <Text style={styles.summaryValue}>{fmtMoney(totalPending)}</Text>
+                  <Text style={styles.summaryValue}>{fmtMoney(totalInProcess)}</Text>
                   <Text style={styles.summaryLabel}>In Process</Text>
                 </View>
                 <View style={styles.summaryCard}>
@@ -284,19 +373,20 @@ export default function PublisherWithdrawalsScreen() {
                 </View>
               </View>
             ) : null}
-            <Text style={styles.sectionTitle}>All Withdrawal Requests</Text>
+            <Text style={styles.sectionTitle}>All Payments</Text>
           </View>
         }
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Wallet size={56} color={colors.neutral[300]} />
-            <Text style={styles.emptyTitle}>No withdrawals yet</Text>
+            <Text style={styles.emptyTitle}>No payments yet</Text>
             <Text style={styles.emptyMsg}>
-              Your withdrawal requests will appear here once you request one from your wallet.
+              Payments will appear here once the admin processes your withdrawal based on your
+              configured settings.
             </Text>
             <View style={{ marginTop: spacing.lg, width: '100%' }}>
               <Button
-                title="Go to Wallet"
+                title="Configure Withdrawal Settings"
                 onPress={() => router.push('/publisher/wallet')}
                 fullWidth
               />
@@ -333,7 +423,6 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontWeight: '700',
   },
-  // Loading
   loadingContainer: {
     flex: 1,
     alignItems: 'center',
@@ -344,7 +433,6 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.textSecondary,
   },
-  // Access guard
   accessGuard: {
     flex: 1,
     alignItems: 'center',
@@ -362,7 +450,6 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
   },
-  // Error
   errorContainer: {
     flex: 1,
     alignItems: 'center',
@@ -393,7 +480,6 @@ const styles = StyleSheet.create({
     ...typography.bodySmall,
     color: colors.error[700],
   },
-  // Summary
   summaryRow: {
     flexDirection: 'row',
     gap: spacing.md,
@@ -424,14 +510,12 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginTop: 2,
   },
-  // Section
   sectionTitle: {
     ...typography.h4,
     color: colors.text,
     fontWeight: '700',
     marginBottom: spacing.md,
   },
-  // Empty
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -447,7 +531,6 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
   },
-  // Withdrawal card
   withdrawalCard: {
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
@@ -501,7 +584,6 @@ const styles = StyleSheet.create({
     ...typography.caption,
     fontWeight: '600',
   },
-  // Invoice
   invoiceRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -522,25 +604,31 @@ const styles = StyleSheet.create({
     color: colors.neutral[700],
     fontWeight: '600',
   },
-  // Payment info
-  paymentInfoBox: {
-    backgroundColor: colors.background,
+  paymentInfoTitle: {
+    ...typography.caption,
+    fontWeight: '700',
+    color: colors.textSecondary,
+    textTransform: 'uppercase',
+    marginTop: spacing.sm,
+    marginBottom: 2,
+  },
+  notesBox: {
+    backgroundColor: colors.neutral[50],
     borderRadius: radius.md,
     padding: spacing.md,
     marginTop: spacing.sm,
   },
-  paymentInfoLabel: {
+  notesLabel: {
     ...typography.caption,
-    fontWeight: '600',
+    fontWeight: '700',
     color: colors.textSecondary,
-    marginBottom: 4,
     textTransform: 'uppercase',
+    marginBottom: 4,
   },
-  paymentInfoValue: {
+  notesValue: {
     ...typography.bodySmall,
     color: colors.text,
   },
-  // Processed
   processedText: {
     ...typography.caption,
     color: colors.neutral[400],

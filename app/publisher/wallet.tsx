@@ -8,130 +8,107 @@ import {
   SafeAreaView,
   RefreshControl,
   ActivityIndicator,
-  Modal,
   TextInput,
   Alert,
-  FlatList,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import {
   ChevronLeft,
   Wallet,
   Shield,
-  ArrowDownCircle,
-  ArrowUpCircle,
-  Clock,
-  Check,
-  X,
-  DollarSign,
   TrendingUp,
   Banknote,
+  Settings,
+  Check,
+  Smartphone,
+  Building2,
+  DollarSign,
+  Info,
 } from 'lucide-react-native';
 import { colors, spacing, radius, typography, shadows } from '@/lib/theme';
 import { useAuth } from '@/lib/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/Button';
-import type { Wallet as WalletType, WalletTransaction } from '@/lib/supabase';
+import type { Wallet as WalletType, WithdrawalSettings } from '@/lib/supabase';
 
-const TX_TYPE_CONFIG: Record<
-  string,
-  { label: string; icon: React.ReactNode; color: string; bg: string; sign: string }
-> = {
-  credit: {
-    label: 'Credit',
-    icon: <ArrowDownCircle size={18} color={colors.success[600]} />,
-    color: colors.success[600],
-    bg: colors.success[50],
-    sign: '+',
-  },
-  debit: {
-    label: 'Debit',
-    icon: <ArrowUpCircle size={18} color={colors.error[600]} />,
-    color: colors.error[600],
-    bg: colors.error[50],
-    sign: '-',
-  },
-  pending_credit: {
-    label: 'Pending Credit',
-    icon: <Clock size={18} color={colors.warning[600]} />,
-    color: colors.warning[600],
-    bg: colors.warning[50],
-    sign: '+',
-  },
-  pending_release: {
-    label: 'Pending Release',
-    icon: <Check size={18} color={colors.success[600]} />,
-    color: colors.success[600],
-    bg: colors.success[50],
-    sign: '+',
-  },
-  withdrawal: {
-    label: 'Withdrawal',
-    icon: <Banknote size={18} color={colors.primary[600]} />,
-    color: colors.primary[600],
-    bg: colors.primary[50],
-    sign: '-',
-  },
-  adjustment: {
-    label: 'Adjustment',
-    icon: <TrendingUp size={18} color={colors.neutral[600]} />,
-    color: colors.neutral[600],
-    bg: colors.neutral[100],
-    sign: '',
-  },
-};
+type PaymentMethod = 'sham_cash' | 'syriatel_cash' | 'bank';
 
-const TX_STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  pending: { label: 'Pending', color: colors.warning[600], bg: colors.warning[50] },
-  completed: { label: 'Completed', color: colors.success[600], bg: colors.success[50] },
-  failed: { label: 'Failed', color: colors.error[600], bg: colors.error[50] },
-  cancelled: { label: 'Cancelled', color: colors.neutral[500], bg: colors.neutral[100] },
-};
+const PAYMENT_METHODS: { value: PaymentMethod; label: string; icon: React.ReactNode }[] = [
+  {
+    value: 'sham_cash',
+    label: 'شام كاش',
+    icon: <Smartphone size={20} color={colors.primary[600]} />,
+  },
+  {
+    value: 'syriatel_cash',
+    label: 'سيريتيل كاش',
+    icon: <Smartphone size={20} color={colors.primary[600]} />,
+  },
+  {
+    value: 'bank',
+    label: 'تحويل بنكي',
+    icon: <Building2 size={20} color={colors.primary[600]} />,
+  },
+];
 
-const MIN_WITHDRAWAL = 20;
+const MIN_THRESHOLD = 5;
 
-export default function PublisherWalletScreen() {
+export default function PublisherWithdrawalSettingsScreen() {
   const { user, isPublisher } = useAuth();
   const [wallet, setWallet] = useState<WalletType | null>(null);
-  const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
+  const [settings, setSettings] = useState<WithdrawalSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
-  // Withdrawal modal
-  const [withdrawModal, setWithdrawModal] = useState(false);
-  const [withdrawAmount, setWithdrawAmount] = useState('');
-  const [paymentInfo, setPaymentInfo] = useState('');
-  const [submitting, setSubmitting] = useState(false);
+  // Form state
+  const [threshold, setThreshold] = useState('');
+  const [method, setMethod] = useState<PaymentMethod>('sham_cash');
+  const [phone, setPhone] = useState('');
+  const [bankName, setBankName] = useState('');
+  const [accountNumber, setAccountNumber] = useState('');
+  const [accountHolder, setAccountHolder] = useState('');
+
+  const populateForm = (s: WithdrawalSettings) => {
+    setThreshold(String(s.min_threshold));
+    setMethod(s.payment_method as PaymentMethod);
+    const details = s.account_details ?? {};
+    setPhone(details.phone ?? '');
+    setBankName(details.bank_name ?? '');
+    setAccountNumber(details.account_number ?? '');
+    setAccountHolder(details.account_holder ?? '');
+  };
 
   const load = useCallback(async () => {
     if (!user) return;
     setError(null);
     try {
-      // Release any matured pending earnings first
-      try { await supabase.rpc('release_pending_earnings'); } catch {}
-
-      const [walletRes, txRes] = await Promise.all([
+      const [walletRes, settingsRes] = await Promise.all([
         supabase
           .from('wallets')
           .select('*')
           .eq('user_id', user.id)
           .maybeSingle(),
         supabase
-          .from('wallet_transactions')
+          .from('withdrawal_settings')
           .select('*')
           .eq('user_id', user.id)
-          .order('created_at', { ascending: false })
-          .limit(50),
+          .maybeSingle(),
       ]);
 
       if (walletRes.error) throw walletRes.error;
-      if (txRes.error) throw txRes.error;
+      if (settingsRes.error && settingsRes.error.code !== 'PGRST116') throw settingsRes.error;
 
       setWallet((walletRes.data as WalletType) ?? null);
-      setTransactions((txRes.data as WalletTransaction[]) ?? []);
+      const s = settingsRes.data as WithdrawalSettings | null;
+      setSettings(s);
+      if (s) populateForm(s);
     } catch (e: any) {
-      setError(e.message || 'Failed to load wallet');
+      setError(e.message || 'Failed to load withdrawal settings');
     }
   }, [user]);
 
@@ -150,94 +127,65 @@ export default function PublisherWalletScreen() {
   const fmtMoney = (n: number) =>
     `$${Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-  const fmtDate = (d: string) =>
-    new Date(d).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
-
-  const openWithdraw = () => {
-    setWithdrawAmount('');
-    setPaymentInfo('');
-    setWithdrawModal(true);
+  const buildAccountDetails = (): Record<string, string> => {
+    if (method === 'bank') {
+      return {
+        bank_name: bankName.trim(),
+        account_number: accountNumber.trim(),
+        account_holder: accountHolder.trim(),
+      };
+    }
+    return { phone: phone.trim() };
   };
 
-  const handleWithdraw = async () => {
+  const handleSave = async () => {
     if (!user) return;
-    const amount = parseFloat(withdrawAmount);
+    setSaveSuccess(false);
 
-    if (isNaN(amount) || amount <= 0) {
-      Alert.alert('Invalid Amount', 'Please enter a valid amount.');
-      return;
-    }
-    if (amount < MIN_WITHDRAWAL) {
-      Alert.alert('Minimum Withdrawal', `Minimum withdrawal amount is $${MIN_WITHDRAWAL}.00.`);
-      return;
-    }
-    if (wallet && amount > wallet.available_balance) {
-      Alert.alert('Insufficient Balance', 'You do not have enough available balance.');
-      return;
-    }
-    if (!paymentInfo.trim()) {
-      Alert.alert('Payment Info Required', 'Please provide your payment information.');
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      const invoiceNumber = `INV-${Date.now()}`;
-
-      const { error: insertErr } = await supabase.from('withdrawal_requests').insert({
-        user_id: user.id,
-        amount,
-        payment_info: paymentInfo.trim(),
-        status: 'pending',
-        invoice_number: invoiceNumber,
-      });
-
-      if (insertErr) throw insertErr;
-
+    const thresholdNum = parseFloat(threshold);
+    if (isNaN(thresholdNum) || thresholdNum <= MIN_THRESHOLD) {
       Alert.alert(
-        'Withdrawal Requested',
-        `Your withdrawal of ${fmtMoney(amount)} has been submitted.\nInvoice: ${invoiceNumber}`,
-        [{ text: 'OK', onPress: () => setWithdrawModal(false) }]
+        'Invalid Threshold',
+        `Minimum withdrawal threshold must be greater than $${MIN_THRESHOLD}.00.`
       );
+      return;
+    }
+
+    if (method === 'bank') {
+      if (!bankName.trim() || !accountNumber.trim() || !accountHolder.trim()) {
+        Alert.alert('Missing Info', 'Please fill in all bank details.');
+        return;
+      }
+    } else {
+      if (!phone.trim()) {
+        Alert.alert('Missing Phone', 'Please enter your mobile wallet phone number.');
+        return;
+      }
+    }
+
+    setSaving(true);
+    try {
+      const payload = {
+        user_id: user.id,
+        min_threshold: thresholdNum,
+        payment_method: method,
+        account_details: buildAccountDetails(),
+        updated_at: new Date().toISOString(),
+      };
+
+      const { error: upsertErr } = await supabase
+        .from('withdrawal_settings')
+        .upsert(payload, { onConflict: 'user_id' });
+
+      if (upsertErr) throw upsertErr;
+
+      setSaveSuccess(true);
       await load();
     } catch (e: any) {
-      Alert.alert('Error', e.message || 'Failed to submit withdrawal request');
+      Alert.alert('Error', e.message || 'Failed to save withdrawal settings.');
     } finally {
-      setSubmitting(false);
+      setSaving(false);
     }
-  };
-
-  const renderTransaction = ({ item }: { item: WalletTransaction }) => {
-    const cfg = TX_TYPE_CONFIG[item.type] ?? TX_TYPE_CONFIG.adjustment;
-    const statusCfg = TX_STATUS_CONFIG[item.status] ?? TX_STATUS_CONFIG.completed;
-    return (
-      <View style={styles.txCard}>
-        <View style={[styles.txIcon, { backgroundColor: cfg.bg }]}>{cfg.icon}</View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.txType}>{cfg.label}</Text>
-          {item.description ? (
-            <Text style={styles.txDesc} numberOfLines={1}>
-              {item.description}
-            </Text>
-          ) : null}
-          <View style={styles.txMetaRow}>
-            <Text style={styles.txDate}>{fmtDate(item.created_at)}</Text>
-            <View style={[styles.txStatusBadge, { backgroundColor: statusCfg.bg }]}>
-              <Text style={[styles.txStatusText, { color: statusCfg.color }]}>
-                {statusCfg.label}
-              </Text>
-            </View>
-          </View>
-        </View>
-        <Text style={[styles.txAmount, { color: cfg.color }]}>
-          {cfg.sign}{fmtMoney(item.amount)}
-        </Text>
-      </View>
-    );
   };
 
   // ── Access guard ──────────────────────────────────────────────
@@ -248,14 +196,14 @@ export default function PublisherWalletScreen() {
           <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
             <ChevronLeft size={24} color={colors.text} />
           </TouchableOpacity>
-          <Text style={styles.title}>Wallet</Text>
+          <Text style={styles.title}>Withdrawal Settings</Text>
           <View style={{ width: 40 }} />
         </View>
         <View style={styles.accessGuard}>
           <Shield size={64} color={colors.neutral[300]} />
           <Text style={styles.accessTitle}>Publisher Access Required</Text>
           <Text style={styles.accessMsg}>
-            You need publisher privileges to access the wallet.
+            You need publisher privileges to configure withdrawal settings.
           </Text>
           <View style={{ marginTop: spacing.lg, width: '100%' }}>
             <Button title="Back to Home" onPress={() => router.replace('/(tabs)/index')} fullWidth />
@@ -265,7 +213,6 @@ export default function PublisherWalletScreen() {
     );
   }
 
-  // ── Loading ────────────────────────────────────────────────────
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -273,18 +220,17 @@ export default function PublisherWalletScreen() {
           <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
             <ChevronLeft size={24} color={colors.text} />
           </TouchableOpacity>
-          <Text style={styles.title}>Wallet</Text>
+          <Text style={styles.title}>Withdrawal Settings</Text>
           <View style={{ width: 40 }} />
         </View>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary[600]} />
-          <Text style={styles.loadingText}>Loading wallet…</Text>
+          <Text style={styles.loadingText}>Loading settings…</Text>
         </View>
       </SafeAreaView>
     );
   }
 
-  // ── Error ──────────────────────────────────────────────────────
   if (error && !wallet) {
     return (
       <SafeAreaView style={styles.container}>
@@ -292,7 +238,7 @@ export default function PublisherWalletScreen() {
           <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
             <ChevronLeft size={24} color={colors.text} />
           </TouchableOpacity>
-          <Text style={styles.title}>Wallet</Text>
+          <Text style={styles.title}>Withdrawal Settings</Text>
           <View style={{ width: 40 }} />
         </View>
         <View style={styles.errorContainer}>
@@ -307,11 +253,9 @@ export default function PublisherWalletScreen() {
     );
   }
 
-  const available = wallet?.available_balance ?? 0;
-  const pending = wallet?.pending_balance ?? 0;
   const totalEarned = wallet?.total_earned ?? 0;
   const totalWithdrawn = wallet?.total_withdrawn ?? 0;
-  const canWithdraw = available >= MIN_WITHDRAWAL;
+  const currentBalance = wallet?.available_balance ?? 0;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -319,179 +263,211 @@ export default function PublisherWalletScreen() {
         <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
           <ChevronLeft size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>Wallet</Text>
+        <Text style={styles.title}>Withdrawal Settings</Text>
         <View style={{ width: 40 }} />
       </View>
 
-      <FlatList
-        data={transactions}
-        keyExtractor={(item) => item.id}
-        renderItem={renderTransaction}
-        contentContainerStyle={{ padding: spacing.md, paddingBottom: spacing.xxl }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        ListHeaderComponent={
-          <View>
-            {error ? (
-              <View style={styles.errorBanner}>
-                <Text style={styles.errorBannerText}>{error}</Text>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <ScrollView
+          contentContainerStyle={{ padding: spacing.md, paddingBottom: spacing.xxl }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          keyboardShouldPersistTaps="handled"
+        >
+          {error ? (
+            <View style={styles.errorBanner}>
+              <Text style={styles.errorBannerText}>{error}</Text>
+            </View>
+          ) : null}
+
+          {/* Earnings stats */}
+          <View style={styles.statsRow}>
+            <View style={styles.statCard}>
+              <View style={[styles.statIcon, { backgroundColor: colors.success[100] }]}>
+                <TrendingUp size={18} color={colors.success[700]} />
+              </View>
+              <Text style={styles.statValue}>{fmtMoney(totalEarned)}</Text>
+              <Text style={styles.statLabel}>Total Earned</Text>
+            </View>
+            <View style={styles.statCard}>
+              <View style={[styles.statIcon, { backgroundColor: colors.primary[100] }]}>
+                <DollarSign size={18} color={colors.primary[700]} />
+              </View>
+              <Text style={styles.statValue}>{fmtMoney(currentBalance)}</Text>
+              <Text style={styles.statLabel}>Current Balance</Text>
+            </View>
+            <View style={styles.statCard}>
+              <View style={[styles.statIcon, { backgroundColor: colors.neutral[100] }]}>
+                <Banknote size={18} color={colors.neutral[600]} />
+              </View>
+              <Text style={styles.statValue}>{fmtMoney(totalWithdrawn)}</Text>
+              <Text style={styles.statLabel}>Paid Out</Text>
+            </View>
+          </View>
+
+          {/* Info box */}
+          <View style={styles.infoBox}>
+            <Info size={16} color={colors.primary[600]} />
+            <Text style={styles.infoText}>
+              Set your minimum balance threshold and payment method. When your balance reaches the
+              threshold, the admin team will process your payment automatically. No manual request
+              needed.
+            </Text>
+          </View>
+
+          {saveSuccess ? (
+            <View style={styles.successBanner}>
+              <Check size={16} color={colors.success[700]} />
+              <Text style={styles.successText}>Settings saved successfully!</Text>
+            </View>
+          ) : null}
+
+          {/* Settings form */}
+          <View style={styles.formCard}>
+            <View style={styles.formHeaderRow}>
+              <View style={styles.formHeaderIcon}>
+                <Settings size={18} color={colors.white} />
+              </View>
+              <Text style={styles.formHeaderTitle}>Withdrawal Configuration</Text>
+            </View>
+
+            {/* Minimum threshold */}
+            <Text style={styles.fieldLabel}>Minimum Threshold ($) *</Text>
+            <Text style={styles.fieldHint}>
+              Must be greater than ${MIN_THRESHOLD}.00. Admin will process payment once your balance
+              reaches this amount.
+            </Text>
+            <TextInput
+              style={styles.input}
+              placeholder={`e.g. 50.00 (minimum > $${MIN_THRESHOLD})`}
+              value={threshold}
+              onChangeText={setThreshold}
+              keyboardType="decimal-pad"
+              editable={!saving}
+            />
+
+            {/* Payment method selector */}
+            <Text style={[styles.fieldLabel, { marginTop: spacing.md }]}>Payment Method *</Text>
+            <View style={styles.methodRow}>
+              {PAYMENT_METHODS.map((m) => (
+                <TouchableOpacity
+                  key={m.value}
+                  style={[
+                    styles.methodBtn,
+                    method === m.value && styles.methodBtnActive,
+                  ]}
+                  onPress={() => setMethod(m.value)}
+                  disabled={saving}
+                  activeOpacity={0.7}
+                >
+                  {m.icon}
+                  <Text
+                    style={[
+                      styles.methodBtnText,
+                      method === m.value && styles.methodBtnTextActive,
+                    ]}
+                  >
+                    {m.label}
+                  </Text>
+                  {method === m.value ? (
+                    <View style={styles.methodCheck}>
+                      <Check size={12} color={colors.white} />
+                    </View>
+                  ) : null}
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Account details — dynamic based on method */}
+            {method === 'bank' ? (
+              <View style={styles.detailsGroup}>
+                <Text style={styles.fieldLabel}>Bank Name *</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g. بنك سورية الدولي الإسلامي"
+                  value={bankName}
+                  onChangeText={setBankName}
+                  editable={!saving}
+                />
+                <Text style={[styles.fieldLabel, { marginTop: spacing.sm }]}>Account Number *</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="رقم الحساب"
+                  value={accountNumber}
+                  onChangeText={setAccountNumber}
+                  keyboardType="number-pad"
+                  editable={!saving}
+                />
+                <Text style={[styles.fieldLabel, { marginTop: spacing.sm }]}>Account Holder Name *</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="اسم صاحب الحساب"
+                  value={accountHolder}
+                  onChangeText={setAccountHolder}
+                  editable={!saving}
+                />
+              </View>
+            ) : (
+              <View style={styles.detailsGroup}>
+                <Text style={styles.fieldLabel}>
+                  {method === 'sham_cash' ? 'شام كاش' : 'سيريتيل كاش'} Phone Number *
+                </Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="09XXXXXXXX"
+                  value={phone}
+                  onChangeText={setPhone}
+                  keyboardType="phone-pad"
+                  editable={!saving}
+                />
+              </View>
+            )}
+
+            {/* Current saved settings preview */}
+            {settings ? (
+              <View style={styles.currentSettingsBox}>
+                <Text style={styles.currentSettingsTitle}>Current Saved Settings</Text>
+                <View style={styles.currentRow}>
+                  <Text style={styles.currentLabel}>Threshold</Text>
+                  <Text style={styles.currentValue}>{fmtMoney(settings.min_threshold)}</Text>
+                </View>
+                <View style={styles.currentRow}>
+                  <Text style={styles.currentLabel}>Method</Text>
+                  <Text style={styles.currentValue}>
+                    {PAYMENT_METHODS.find(m => m.value === settings.payment_method)?.label ?? settings.payment_method}
+                  </Text>
+                </View>
               </View>
             ) : null}
 
-            {/* Balance hero card */}
-            <View style={styles.balanceCard}>
-              <View style={styles.balanceHeader}>
-                <View style={styles.balanceIconWrap}>
-                  <Wallet size={22} color={colors.white} />
-                </View>
-                <Text style={styles.balanceTitle}>Available Balance</Text>
-              </View>
-              <Text style={styles.balanceTotal}>{fmtMoney(available)}</Text>
-              <View style={styles.balanceSubRow}>
-                <View style={styles.balanceSubItem}>
-                  <View style={[styles.balanceDot, { backgroundColor: colors.warning[500] }]} />
-                  <Text style={styles.balanceSubLabel}>Pending</Text>
-                  <Text style={styles.balanceSubValue}>{fmtMoney(pending)}</Text>
-                </View>
-                <View style={styles.balanceSubDivider} />
-                <View style={styles.balanceSubItem}>
-                  <View style={[styles.balanceDot, { backgroundColor: colors.success[500] }]} />
-                  <Text style={styles.balanceSubLabel}>Total</Text>
-                  <Text style={styles.balanceSubValue}>{fmtMoney(available + pending)}</Text>
-                </View>
-              </View>
-              <View style={{ marginTop: spacing.md }}>
-                <Button
-                  title="Request Withdrawal"
-                  onPress={openWithdraw}
-                  disabled={!canWithdraw}
-                  fullWidth
-                />
-                {!canWithdraw ? (
-                  <Text style={styles.withdrawNote}>
-                    Minimum $20.00 available balance required to withdraw.
-                  </Text>
-                ) : null}
-              </View>
-            </View>
-
-            {/* Stats row */}
-            <View style={styles.statsRow}>
-              <View style={styles.statCard}>
-                <View style={[styles.statIcon, { backgroundColor: colors.success[100] }]}>
-                  <TrendingUp size={18} color={colors.success[700]} />
-                </View>
-                <Text style={styles.statValue}>{fmtMoney(totalEarned)}</Text>
-                <Text style={styles.statLabel}>Total Earned</Text>
-              </View>
-              <View style={styles.statCard}>
-                <View style={[styles.statIcon, { backgroundColor: colors.primary[100] }]}>
-                  <Banknote size={18} color={colors.primary[700]} />
-                </View>
-                <Text style={styles.statValue}>{fmtMoney(totalWithdrawn)}</Text>
-                <Text style={styles.statLabel}>Total Withdrawn</Text>
-              </View>
-            </View>
-
-            {/* Transactions header */}
-            <Text style={styles.sectionTitle}>Recent Transactions</Text>
-          </View>
-        }
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Wallet size={56} color={colors.neutral[300]} />
-            <Text style={styles.emptyTitle}>No transactions yet</Text>
-            <Text style={styles.emptyMsg}>
-              Your affiliate earnings and withdrawals will appear here.
-            </Text>
-          </View>
-        }
-      />
-
-      {/* ── Withdraw Modal ────────────────────────────────────────── */}
-      <Modal
-        visible={withdrawModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => !submitting && setWithdrawModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Request Withdrawal</Text>
-              <TouchableOpacity
-                style={styles.modalClose}
-                onPress={() => !submitting && setWithdrawModal(false)}
-              >
-                <X size={20} color={colors.neutral[500]} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false}>
-              {/* Available balance display */}
-              <View style={styles.availableBox}>
-                <Text style={styles.availableLabel}>Available Balance</Text>
-                <Text style={styles.availableValue}>{fmtMoney(available)}</Text>
-              </View>
-
-              {/* Amount */}
-              <Text style={styles.fieldLabel}>Amount ($) *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder={`Minimum $${MIN_WITHDRAWAL}.00`}
-                value={withdrawAmount}
-                onChangeText={setWithdrawAmount}
-                keyboardType="decimal-pad"
-                editable={!submitting}
+            <View style={{ marginTop: spacing.lg }}>
+              <Button
+                title={settings ? 'Update Settings' : 'Save Settings'}
+                onPress={handleSave}
+                loading={saving}
+                fullWidth
               />
-              <Text style={styles.fieldHint}>
-                Minimum withdrawal: ${MIN_WITHDRAWAL}.00
-              </Text>
-
-              {/* Payment Info */}
-              <Text style={styles.fieldLabel}>Payment Information *</Text>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                placeholder="Enter your bank details, PayPal, or other payment info…"
-                value={paymentInfo}
-                onChangeText={setPaymentInfo}
-                multiline
-                numberOfLines={4}
-                textAlignVertical="top"
-                editable={!submitting}
-              />
-
-              {/* Warning */}
-              <View style={styles.warningBox}>
-                <Text style={styles.warningText}>
-                  Your withdrawal will be reviewed by our admin team. Funds will be deducted from
-                  your available balance once approved and paid.
-                </Text>
-              </View>
-
-              {/* Actions */}
-              <View style={styles.modalActions}>
-                <View style={{ flex: 1 }}>
-                  <Button
-                    title="Cancel"
-                    onPress={() => setWithdrawModal(false)}
-                    variant="outline"
-                    disabled={submitting}
-                    fullWidth
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Button
-                    title="Submit Request"
-                    onPress={handleWithdraw}
-                    loading={submitting}
-                    fullWidth
-                  />
-                </View>
-              </View>
-            </ScrollView>
+            </View>
           </View>
-        </View>
-      </Modal>
+
+          {/* View payment history */}
+          <TouchableOpacity
+            style={styles.historyLink}
+            onPress={() => router.push('/publisher/withdrawals')}
+            activeOpacity={0.7}
+          >
+            <Wallet size={20} color={colors.primary[600]} />
+            <Text style={styles.historyLinkText}>View Payment History</Text>
+            <ChevronLeft
+              size={18}
+              color={colors.primary[600]}
+              style={{ transform: [{ rotate: '180deg' }] }}
+            />
+          </TouchableOpacity>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -521,7 +497,6 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontWeight: '700',
   },
-  // Loading
   loadingContainer: {
     flex: 1,
     alignItems: 'center',
@@ -532,7 +507,6 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.textSecondary,
   },
-  // Access guard
   accessGuard: {
     flex: 1,
     alignItems: 'center',
@@ -550,7 +524,6 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
   },
-  // Error
   errorContainer: {
     flex: 1,
     alignItems: 'center',
@@ -581,79 +554,28 @@ const styles = StyleSheet.create({
     ...typography.bodySmall,
     color: colors.error[700],
   },
-  // Balance card
-  balanceCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-    marginBottom: spacing.md,
-    ...shadows.md,
-  },
-  balanceHeader: {
+  successBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  balanceIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.primary[600],
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  balanceTitle: {
-    ...typography.bodySmall,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    textTransform: 'uppercase',
-  },
-  balanceTotal: {
-    ...typography.h1,
-    color: colors.text,
-    fontWeight: '700',
-    marginBottom: spacing.md,
-  },
-  balanceSubRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.background,
+    backgroundColor: colors.success[50],
     borderRadius: radius.md,
-    padding: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.success[200],
   },
-  balanceSubItem: { flex: 1, gap: 4 },
-  balanceSubDivider: {
-    width: 1,
-    height: 40,
-    backgroundColor: colors.border,
-    marginHorizontal: spacing.md,
-  },
-  balanceDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  balanceSubLabel: {
-    ...typography.caption,
-    color: colors.textSecondary,
-  },
-  balanceSubValue: {
-    ...typography.h4,
-    color: colors.text,
-    fontWeight: '700',
-  },
-  withdrawNote: {
-    ...typography.caption,
-    color: colors.warning[600],
-    textAlign: 'center',
-    marginTop: spacing.sm,
+  successText: {
+    ...typography.bodySmall,
+    color: colors.success[700],
+    fontWeight: '600',
   },
   // Stats row
   statsRow: {
     flexDirection: 'row',
-    gap: spacing.md,
-    marginBottom: spacing.lg,
+    gap: spacing.sm,
+    marginBottom: spacing.md,
   },
   statCard: {
     flex: 1,
@@ -663,15 +585,15 @@ const styles = StyleSheet.create({
     ...shadows.sm,
   },
   statIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.sm,
   },
   statValue: {
-    ...typography.h4,
+    ...typography.bodySmall,
     color: colors.text,
     fontWeight: '700',
   },
@@ -680,147 +602,63 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginTop: 2,
   },
-  // Section
-  sectionTitle: {
-    ...typography.h4,
-    color: colors.text,
-    fontWeight: '700',
-    marginBottom: spacing.md,
-  },
-  // Empty
-  emptyState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.xxl,
+  // Info box
+  infoBox: {
+    flexDirection: 'row',
     gap: spacing.sm,
-  },
-  emptyTitle: {
-    ...typography.h4,
-    color: colors.text,
-  },
-  emptyMsg: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  // Transaction card
-  txCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-    ...shadows.sm,
-  },
-  txIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  txType: {
-    ...typography.bodySmall,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  txDesc: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-  txMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginTop: 4,
-  },
-  txDate: {
-    ...typography.caption,
-    color: colors.neutral[400],
-  },
-  txStatusBadge: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: radius.sm,
-  },
-  txStatusText: {
-    ...typography.caption,
-    fontWeight: '600',
-  },
-  txAmount: {
-    ...typography.h4,
-    fontWeight: '700',
-  },
-  // Modal
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: colors.overlay,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing.lg,
-  },
-  modalContent: {
-    width: '100%',
-    maxWidth: 440,
-    maxHeight: '90%',
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-    ...shadows.lg,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.md,
-  },
-  modalTitle: {
-    ...typography.h4,
-    color: colors.text,
-    fontWeight: '700',
-  },
-  modalClose: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.neutral[100],
-  },
-  // Available box
-  availableBox: {
     backgroundColor: colors.primary[50],
     borderRadius: radius.md,
     padding: spacing.md,
     marginBottom: spacing.md,
-    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.primary[100],
+    alignItems: 'flex-start',
   },
-  availableLabel: {
+  infoText: {
     ...typography.caption,
-    fontWeight: '600',
     color: colors.primary[700],
-    textTransform: 'uppercase',
+    flex: 1,
+    lineHeight: 18,
   },
-  availableValue: {
-    ...typography.h2,
-    color: colors.primary[700],
+  // Form card
+  formCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+    ...shadows.md,
+  },
+  formHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+    paddingBottom: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  formHeaderIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.primary[600],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  formHeaderTitle: {
+    ...typography.body,
     fontWeight: '700',
-    marginTop: 4,
+    color: colors.text,
   },
-  // Form fields
   fieldLabel: {
     ...typography.bodySmall,
     fontWeight: '600',
     color: colors.text,
     marginBottom: spacing.sm,
-    marginTop: spacing.sm,
   },
   fieldHint: {
     ...typography.caption,
-    color: colors.neutral[400],
+    color: colors.neutral[500],
     marginBottom: spacing.sm,
   },
   input: {
@@ -833,28 +671,96 @@ const styles = StyleSheet.create({
     color: colors.text,
     backgroundColor: colors.background,
   },
-  textArea: {
-    minHeight: 100,
-    textAlignVertical: 'top',
+  // Method selector
+  methodRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
   },
-  // Warning
-  warningBox: {
-    backgroundColor: colors.warning[50],
-    borderRadius: radius.md,
+  methodBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
+    position: 'relative',
+  },
+  methodBtnActive: {
+    borderColor: colors.primary[600],
+    backgroundColor: colors.primary[50],
+  },
+  methodBtnText: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    fontWeight: '500',
+  },
+  methodBtnTextActive: {
+    color: colors.primary[700],
+    fontWeight: '700',
+  },
+  methodCheck: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: colors.primary[600],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  detailsGroup: {
+    gap: 4,
+  },
+  // Current settings
+  currentSettingsBox: {
+    backgroundColor: colors.neutral[50],
+    borderRadius: radius.md,
+    padding: spacing.md,
     marginTop: spacing.md,
     borderWidth: 1,
-    borderColor: colors.warning[100],
+    borderColor: colors.border,
   },
-  warningText: {
+  currentSettingsTitle: {
     ...typography.caption,
-    color: colors.warning[600],
+    fontWeight: '700',
+    color: colors.textSecondary,
+    textTransform: 'uppercase',
+    marginBottom: spacing.sm,
   },
-  // Modal actions
-  modalActions: {
+  currentRow: {
     flexDirection: 'row',
-    gap: spacing.md,
-    marginTop: spacing.lg,
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+  },
+  currentLabel: {
+    ...typography.caption,
+    color: colors.textSecondary,
+  },
+  currentValue: {
+    ...typography.caption,
+    color: colors.text,
+    fontWeight: '600',
+  },
+  // History link
+  historyLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    ...shadows.sm,
+  },
+  historyLinkText: {
+    ...typography.body,
+    color: colors.primary[600],
+    fontWeight: '600',
+    flex: 1,
   },
 });

@@ -15,12 +15,12 @@ import {
   Package,
   Video,
   ShoppingBag,
-  Wallet,
+  BarChart3,
   Store,
   ArrowRight,
   Shield,
   TrendingUp,
-  Clock,
+  DollarSign,
 } from 'lucide-react-native';
 import { colors, spacing, radius, typography, shadows } from '@/lib/theme';
 import { useAuth } from '@/lib/AuthContext';
@@ -46,9 +46,6 @@ export default function MerchantDashboardScreen() {
     if (!user) return;
     setError(null);
     try {
-      // Release any matured pending earnings first
-      try { await supabase.rpc('release_pending_earnings'); } catch {}
-
       const [productsRes, reelsRes, ordersRes, walletRes] = await Promise.all([
         supabase
           .from('products')
@@ -172,15 +169,11 @@ export default function MerchantDashboardScreen() {
   }
 
   const wallet = stats?.wallet;
-  const available = wallet?.available_balance ?? 0;
-  const pending = wallet?.pending_balance ?? 0;
+  const totalEarned = wallet?.total_earned ?? 0;
+  const totalWithdrawn = wallet?.total_withdrawn ?? 0;
+  const currentBalance = wallet?.available_balance ?? 0;
 
-  const statCards: {
-    label: string;
-    value: string;
-    icon: React.ReactNode;
-    iconBg: string;
-  }[] = [
+  const statCards = [
     {
       label: 'Total Products',
       value: stats ? String(stats.totalProducts) : '—',
@@ -200,9 +193,9 @@ export default function MerchantDashboardScreen() {
       iconBg: colors.success[100],
     },
     {
-      label: 'Wallet Balance',
-      value: fmtMoney(available + pending),
-      icon: <Wallet size={22} color={colors.warning[600]} />,
+      label: 'Current Balance',
+      value: fmtMoney(currentBalance),
+      icon: <DollarSign size={22} color={colors.warning[600]} />,
       iconBg: colors.warning[100],
     },
   ];
@@ -227,16 +220,10 @@ export default function MerchantDashboardScreen() {
       onPress: () => router.push('/merchant/orders'),
     },
     {
-      label: 'Wallet & Earnings',
-      description: 'View balance, transactions, and request withdrawals',
-      icon: <Wallet size={24} color={colors.primary[600]} />,
+      label: 'Earnings & Transactions',
+      description: 'View your sales earnings and transaction history',
+      icon: <BarChart3 size={24} color={colors.primary[600]} />,
       onPress: () => router.push('/merchant/wallet'),
-    },
-    {
-      label: 'Withdrawal History',
-      description: 'View status of your withdrawal requests',
-      icon: <Clock size={24} color={colors.primary[600]} />,
-      onPress: () => router.push('/merchant/withdrawals'),
     },
   ];
 
@@ -271,26 +258,27 @@ export default function MerchantDashboardScreen() {
           </View>
         ) : null}
 
-        {/* Wallet summary card */}
-        <View style={styles.walletCard}>
-          <View style={styles.walletHeader}>
-            <View style={styles.walletIconWrap}>
-              <Wallet size={20} color={colors.white} />
+        {/* Earnings summary card */}
+        <View style={styles.earningsCard}>
+          <View style={styles.earningsHeader}>
+            <View style={styles.earningsIconWrap}>
+              <BarChart3 size={20} color={colors.white} />
             </View>
-            <Text style={styles.walletTitle}>Wallet Balance</Text>
+            <Text style={styles.earningsTitle}>Earnings Summary</Text>
           </View>
-          <Text style={styles.walletTotal}>{fmtMoney(available + pending)}</Text>
-          <View style={styles.walletSplit}>
-            <View style={styles.walletSplitItem}>
-              <View style={[styles.walletDot, { backgroundColor: colors.success[500] }]} />
-              <Text style={styles.walletSplitLabel}>Available</Text>
-              <Text style={styles.walletSplitValue}>{fmtMoney(available)}</Text>
+          <Text style={styles.earningsTotal}>{fmtMoney(totalEarned)}</Text>
+          <Text style={styles.earningsSub}>Lifetime earnings from product sales</Text>
+          <View style={styles.earningsSplit}>
+            <View style={styles.earningsSplitItem}>
+              <TrendingUp size={14} color={colors.success[600]} />
+              <Text style={styles.earningsSplitLabel}>Total Earned</Text>
+              <Text style={styles.earningsSplitValue}>{fmtMoney(totalEarned)}</Text>
             </View>
-            <View style={styles.walletSplitDivider} />
-            <View style={styles.walletSplitItem}>
-              <View style={[styles.walletDot, { backgroundColor: colors.warning[500] }]} />
-              <Text style={styles.walletSplitLabel}>Pending</Text>
-              <Text style={styles.walletSplitValue}>{fmtMoney(pending)}</Text>
+            <View style={styles.earningsSplitDivider} />
+            <View style={styles.earningsSplitItem}>
+              <DollarSign size={14} color={colors.primary[600]} />
+              <Text style={styles.earningsSplitLabel}>Paid Out</Text>
+              <Text style={styles.earningsSplitValue}>{fmtMoney(totalWithdrawn)}</Text>
             </View>
           </View>
         </View>
@@ -369,7 +357,6 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontWeight: '700',
   },
-  // Loading
   loadingContainer: {
     flex: 1,
     alignItems: 'center',
@@ -380,7 +367,6 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.textSecondary,
   },
-  // Access guard
   accessGuard: {
     flex: 1,
     alignItems: 'center',
@@ -398,7 +384,6 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
   },
-  // Error
   errorContainer: {
     flex: 1,
     alignItems: 'center',
@@ -458,64 +443,68 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // Wallet card
-  walletCard: {
+  // Earnings card
+  earningsCard: {
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
     padding: spacing.lg,
     marginBottom: spacing.lg,
     ...shadows.md,
   },
-  walletHeader: {
+  earningsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
     marginBottom: spacing.sm,
   },
-  walletIconWrap: {
+  earningsIconWrap: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: colors.primary[600],
+    backgroundColor: colors.success[600],
     alignItems: 'center',
     justifyContent: 'center',
   },
-  walletTitle: {
+  earningsTitle: {
     ...typography.bodySmall,
     fontWeight: '600',
     color: colors.textSecondary,
     textTransform: 'uppercase',
   },
-  walletTotal: {
+  earningsTotal: {
     ...typography.h1,
     color: colors.text,
     fontWeight: '700',
+    marginBottom: 4,
+  },
+  earningsSub: {
+    ...typography.caption,
+    color: colors.textSecondary,
     marginBottom: spacing.md,
   },
-  walletSplit: {
+  earningsSplit: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.background,
     borderRadius: radius.md,
     padding: spacing.md,
   },
-  walletSplitItem: { flex: 1, gap: 4 },
-  walletSplitDivider: {
+  earningsSplitItem: {
+    flex: 1,
+    gap: 4,
+    alignItems: 'flex-start',
+  },
+  earningsSplitDivider: {
     width: 1,
-    height: 40,
+    height: 44,
     backgroundColor: colors.border,
     marginHorizontal: spacing.md,
   },
-  walletDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  walletSplitLabel: {
+  earningsSplitLabel: {
     ...typography.caption,
     color: colors.textSecondary,
   },
-  walletSplitValue: {
+  earningsSplitValue: {
     ...typography.h4,
     color: colors.text,
     fontWeight: '700',

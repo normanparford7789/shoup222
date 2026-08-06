@@ -276,6 +276,16 @@ export type WithdrawalRequest = {
   updated_at: string;
 };
 
+export type WithdrawalSettings = {
+  id: string;
+  user_id: string;
+  min_threshold: number;
+  payment_method: 'sham_cash' | 'syriatel_cash' | 'bank';
+  account_details: Record<string, string>;
+  updated_at: string;
+  created_at: string;
+};
+
 export type AffiliateLink = {
   id: string;
   user_id: string;
