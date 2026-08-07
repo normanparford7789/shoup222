@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -9,7 +8,6 @@ import {
   RefreshControl,
   ActivityIndicator,
   Modal,
-  TextInput,
   Switch,
   Alert,
 } from 'react-native';
@@ -42,6 +40,7 @@ import {
   EyeOff,
 } from 'lucide-react-native';
 import { colors, spacing, radius, typography, shadows } from '@/lib/theme';
+import { ArabicText as Text, ArabicTextInput as TextInputArabic } from '@/components/ArabicText';
 import { useAuth } from '@/lib/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/Button';
@@ -426,7 +425,7 @@ export default function AdminUsersScreen() {
       {/* Search bar */}
       <View style={styles.searchContainer}>
         <Search size={18} color={colors.neutral[400]} />
-        <TextInput
+        <TextInputArabic
           style={styles.searchInput}
           placeholder="Search by name or email…"
           value={search}
@@ -722,7 +721,7 @@ export default function AdminUsersScreen() {
                       </View>
 
                       <Text style={styles.restrictionLabel}>Restricted Notes</Text>
-                      <TextInput
+                      <TextInputArabic
                         style={[styles.restrictionInput, styles.textArea]}
                         placeholder="Add notes about restrictions applied to this merchant…"
                         value={restrictions.restricted_notes}
@@ -796,7 +795,7 @@ export default function AdminUsersScreen() {
             <Text style={styles.inputLabel}>Full Name</Text>
             <View style={styles.inputRow}>
               <UsersIcon size={18} color={colors.neutral[400]} />
-              <TextInput
+              <TextInputArabic
                 style={styles.modalInput}
                 placeholder="John Doe"
                 value={createForm.full_name}
@@ -810,7 +809,7 @@ export default function AdminUsersScreen() {
             <Text style={styles.inputLabel}>Email Address</Text>
             <View style={styles.inputRow}>
               <Mail size={18} color={colors.neutral[400]} />
-              <TextInput
+              <TextInputArabic
                 style={styles.modalInput}
                 placeholder="user@example.com"
                 value={createForm.email}
@@ -826,7 +825,7 @@ export default function AdminUsersScreen() {
             <Text style={styles.inputLabel}>Password</Text>
             <View style={styles.inputRow}>
               <KeyRound size={18} color={colors.neutral[400]} />
-              <TextInput
+              <TextInputArabic
                 style={styles.modalInput}
                 placeholder="Min 6 characters"
                 value={createForm.password}

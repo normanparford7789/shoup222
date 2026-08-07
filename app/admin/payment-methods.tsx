@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -9,7 +8,6 @@ import {
   RefreshControl,
   ActivityIndicator,
   Modal,
-  TextInput,
   Alert,
 } from 'react-native';
 import { router } from 'expo-router';
@@ -26,6 +24,7 @@ import {
   Edit3,
 } from 'lucide-react-native';
 import { colors, spacing, radius, typography, shadows } from '@/lib/theme';
+import { ArabicText as Text, ArabicTextInput as TextInputArabic } from '@/components/ArabicText';
 import { useAuth } from '@/lib/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/Button';
@@ -361,7 +360,7 @@ export default function AdminPaymentMethodsScreen() {
 
             <ScrollView showsVerticalScrollIndicator={false}>
               <Text style={styles.fieldLabel}>Name *</Text>
-              <TextInput
+              <TextInputArabic
                 style={styles.input}
                 placeholder="e.g. شام كاش"
                 value={name}
@@ -391,7 +390,7 @@ export default function AdminPaymentMethodsScreen() {
               </View>
 
               <Text style={[styles.fieldLabel, { marginTop: spacing.md }]}>Provider / Display Name *</Text>
-              <TextInput
+              <TextInputArabic
                 style={styles.input}
                 placeholder="e.g. SyriaTel Cash, بنك سورية"
                 value={provider}
@@ -400,7 +399,7 @@ export default function AdminPaymentMethodsScreen() {
               />
 
               <Text style={[styles.fieldLabel, { marginTop: spacing.md }]}>Instructions (Optional)</Text>
-              <TextInput
+              <TextInputArabic
                 style={[styles.input, styles.textArea]}
                 placeholder="Any instructions for publishers using this method…"
                 value={instructions}

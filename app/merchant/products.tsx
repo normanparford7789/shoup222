@@ -1,7 +1,6 @@
 import { useState, useCallback } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -9,7 +8,6 @@ import {
   RefreshControl,
   ActivityIndicator,
   Modal,
-  TextInput,
   Alert,
   FlatList,
 } from 'react-native';
@@ -26,6 +24,7 @@ import {
   Shield,
 } from 'lucide-react-native';
 import { colors, spacing, radius, typography, shadows } from '@/lib/theme';
+import { ArabicText as Text, ArabicTextInput as TextInputArabic } from '@/components/ArabicText';
 import { useAuth } from '@/lib/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/Button';
@@ -461,7 +460,7 @@ export default function MerchantProductsScreen() {
             <ScrollView showsVerticalScrollIndicator={false}>
               {/* Name */}
               <Text style={styles.fieldLabel}>Product Name *</Text>
-              <TextInput
+              <TextInputArabic
                 style={styles.input}
                 placeholder="Enter product name"
                 value={form.name}
@@ -471,7 +470,7 @@ export default function MerchantProductsScreen() {
 
               {/* Price */}
               <Text style={styles.fieldLabel}>Price ($) *</Text>
-              <TextInput
+              <TextInputArabic
                 style={styles.input}
                 placeholder="0.00"
                 value={form.price}
@@ -482,7 +481,7 @@ export default function MerchantProductsScreen() {
 
               {/* Description */}
               <Text style={styles.fieldLabel}>Description</Text>
-              <TextInput
+              <TextInputArabic
                 style={[styles.input, styles.textArea]}
                 placeholder="Describe your product…"
                 value={form.description}

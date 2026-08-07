@@ -1,14 +1,12 @@
 import { useState, useCallback } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
   SafeAreaView,
   RefreshControl,
   ActivityIndicator,
-  TextInput,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -28,6 +26,7 @@ import {
   Info,
 } from 'lucide-react-native';
 import { colors, spacing, radius, typography, shadows } from '@/lib/theme';
+import { ArabicText as Text } from '@/components/ArabicText';
 import { useAuth } from '@/lib/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/Button';
@@ -339,7 +338,7 @@ export default function PublisherWithdrawalSettingsScreen() {
               Must be greater than ${MIN_THRESHOLD}.00. Admin will process payment once your balance
               reaches this amount.
             </Text>
-            <TextInput
+            <TextInputArabic
               style={styles.input}
               placeholder={`e.g. 50.00 (minimum > $${MIN_THRESHOLD})`}
               value={threshold}
@@ -384,7 +383,7 @@ export default function PublisherWithdrawalSettingsScreen() {
             {method === 'bank' ? (
               <View style={styles.detailsGroup}>
                 <Text style={styles.fieldLabel}>Bank Name *</Text>
-                <TextInput
+                <TextInputArabic
                   style={styles.input}
                   placeholder="e.g. بنك سورية الدولي الإسلامي"
                   value={bankName}
@@ -392,7 +391,7 @@ export default function PublisherWithdrawalSettingsScreen() {
                   editable={!saving}
                 />
                 <Text style={[styles.fieldLabel, { marginTop: spacing.sm }]}>Account Number *</Text>
-                <TextInput
+                <TextInputArabic
                   style={styles.input}
                   placeholder="رقم الحساب"
                   value={accountNumber}
@@ -401,7 +400,7 @@ export default function PublisherWithdrawalSettingsScreen() {
                   editable={!saving}
                 />
                 <Text style={[styles.fieldLabel, { marginTop: spacing.sm }]}>Account Holder Name *</Text>
-                <TextInput
+                <TextInputArabic
                   style={styles.input}
                   placeholder="اسم صاحب الحساب"
                   value={accountHolder}
@@ -414,7 +413,7 @@ export default function PublisherWithdrawalSettingsScreen() {
                 <Text style={styles.fieldLabel}>
                   {method === 'sham_cash' ? 'شام كاش' : 'سيريتيل كاش'} Phone Number *
                 </Text>
-                <TextInput
+                <TextInputArabic
                   style={styles.input}
                   placeholder="09XXXXXXXX"
                   value={phone}

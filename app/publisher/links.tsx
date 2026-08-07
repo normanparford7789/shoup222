@@ -1,7 +1,6 @@
 import { useState, useCallback } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -9,7 +8,6 @@ import {
   RefreshControl,
   ActivityIndicator,
   Modal,
-  TextInput,
   Alert,
   FlatList,
   Image,
@@ -30,6 +28,7 @@ import {
   Package,
 } from 'lucide-react-native';
 import { colors, spacing, radius, typography, shadows } from '@/lib/theme';
+import { ArabicText as Text, ArabicTextInput as TextInputArabic } from '@/components/ArabicText';
 import { useAuth } from '@/lib/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/Button';
@@ -435,7 +434,7 @@ export default function PublisherLinksScreen() {
                 {/* Search */}
                 <View style={styles.searchBox}>
                   <Search size={18} color={colors.neutral[400]} />
-                  <TextInput
+                  <TextInputArabic
                     style={styles.searchInput}
                     placeholder="Search products…"
                     value={searchQuery}

@@ -1,7 +1,6 @@
 import { useState, useCallback } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -10,7 +9,6 @@ import {
   ActivityIndicator,
   Modal,
   FlatList,
-  TextInput,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import {
@@ -37,6 +35,7 @@ import {
   Award,
 } from 'lucide-react-native';
 import { colors, spacing, radius, typography, shadows } from '@/lib/theme';
+import { ArabicText as Text, ArabicTextInput as TextInputArabic } from '@/components/ArabicText';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/Button';
 import { downloadCSV, buildCSV, exportPDF, buildHTMLTable } from '@/lib/export';
@@ -278,7 +277,7 @@ export default function AdminMerchantsScreen() {
       <View style={styles.searchRow}>
         <View style={styles.searchInput}>
           <Search size={18} color={colors.neutral[400]} />
-          <TextInput
+          <TextInputArabic
             style={styles.searchField}
             placeholder="Search by name or email…"
             value={search}

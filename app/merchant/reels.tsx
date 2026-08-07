@@ -1,7 +1,6 @@
 import { useState, useCallback } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -9,7 +8,6 @@ import {
   RefreshControl,
   ActivityIndicator,
   Modal,
-  TextInput,
   Alert,
   FlatList,
 } from 'react-native';
@@ -27,6 +25,7 @@ import {
   Image as ImageIcon,
 } from 'lucide-react-native';
 import { colors, spacing, radius, typography, shadows } from '@/lib/theme';
+import { ArabicText as Text, ArabicTextInput as TextInputArabic } from '@/components/ArabicText';
 import { useAuth } from '@/lib/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/Button';
@@ -350,7 +349,7 @@ export default function MerchantReelsScreen() {
             <ScrollView showsVerticalScrollIndicator={false}>
               {/* Title */}
               <Text style={styles.fieldLabel}>Title *</Text>
-              <TextInput
+              <TextInputArabic
                 style={styles.input}
                 placeholder="Enter reel title"
                 value={form.title}
@@ -360,7 +359,7 @@ export default function MerchantReelsScreen() {
 
               {/* Description */}
               <Text style={styles.fieldLabel}>Description</Text>
-              <TextInput
+              <TextInputArabic
                 style={[styles.input, styles.textArea]}
                 placeholder="Describe your reel…"
                 value={form.description}
@@ -440,7 +439,7 @@ export default function MerchantReelsScreen() {
 
               {/* Thumbnail URL */}
               <Text style={styles.fieldLabel}>Thumbnail URL</Text>
-              <TextInput
+              <TextInputArabic
                 style={styles.input}
                 placeholder="https://example.com/thumb.jpg"
                 value={form.thumbnail_url}

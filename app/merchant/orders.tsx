@@ -1,7 +1,6 @@
 import { useState, useCallback } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -14,7 +13,6 @@ import {
   Share,
   Platform,
   Linking,
-  TextInput,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import {
@@ -37,6 +35,7 @@ import {
   TrendingUp,
 } from 'lucide-react-native';
 import { colors, spacing, radius, typography, shadows } from '@/lib/theme';
+import { ArabicText as Text, ArabicTextInput as TextInputArabic } from '@/components/ArabicText';
 import { useAuth } from '@/lib/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/Button';
@@ -774,7 +773,7 @@ export default function MerchantOrdersScreen() {
             </ScrollView>
 
             <Text style={styles.fieldLabel}>Note (optional)</Text>
-            <TextInput
+            <TextInputArabic
               style={[styles.input, styles.textArea]}
               placeholder="Add a note about this status change…"
               value={statusNote}

@@ -1,12 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   FlatList,
   TouchableOpacity,
   SafeAreaView,
-  TextInput,
   Alert,
   RefreshControl,
   ScrollView,
@@ -27,6 +25,7 @@ import {
   ChevronUp,
 } from 'lucide-react-native';
 import { colors, spacing, radius, typography, shadows } from '@/lib/theme';
+import { ArabicText as Text, ArabicTextInput as TextInputArabic } from '@/components/ArabicText';
 import { useAuth } from '@/lib/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { LoadingState } from '@/components/LoadingState';
@@ -366,14 +365,14 @@ export default function AdminShippingBranchesScreen() {
               </TouchableOpacity>
             </View>
             <Text style={styles.label}>Governorate Name *</Text>
-            <TextInput
+            <TextInputArabic
               style={styles.input}
               value={govForm.name}
               onChangeText={v => setGovForm({ ...govForm, name: v })}
               placeholder="e.g. Damascus"
             />
             <Text style={styles.label}>Sort Order</Text>
-            <TextInput
+            <TextInputArabic
               style={styles.input}
               value={String(govForm.sort_order)}
               onChangeText={v => setGovForm({ ...govForm, sort_order: Number(v) || 0 })}
@@ -427,14 +426,14 @@ export default function AdminShippingBranchesScreen() {
                 ))}
               </View>
               <Text style={styles.label}>Branch Name *</Text>
-              <TextInput
+              <TextInputArabic
                 style={styles.input}
                 value={branchForm.branch_name}
                 onChangeText={v => setBranchForm({ ...branchForm, branch_name: v })}
                 placeholder="e.g. Downtown Branch"
               />
               <Text style={styles.label}>Address *</Text>
-              <TextInput
+              <TextInputArabic
                 style={styles.input}
                 value={branchForm.address}
                 onChangeText={v => setBranchForm({ ...branchForm, address: v })}
@@ -442,20 +441,20 @@ export default function AdminShippingBranchesScreen() {
                 multiline
               />
               <Text style={styles.label}>Phone</Text>
-              <TextInput
+              <TextInputArabic
                 style={styles.input}
                 value={branchForm.phone}
                 onChangeText={v => setBranchForm({ ...branchForm, phone: v })}
                 keyboardType="phone-pad"
               />
               <Text style={styles.label}>Manager Name</Text>
-              <TextInput
+              <TextInputArabic
                 style={styles.input}
                 value={branchForm.manager_name}
                 onChangeText={v => setBranchForm({ ...branchForm, manager_name: v })}
               />
               <Text style={styles.label}>Sort Order</Text>
-              <TextInput
+              <TextInputArabic
                 style={styles.input}
                 value={String(branchForm.sort_order)}
                 onChangeText={v => setBranchForm({ ...branchForm, sort_order: Number(v) || 0 })}

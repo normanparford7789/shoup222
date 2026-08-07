@@ -1,5 +1,7 @@
-import { TouchableOpacity, Text, StyleSheet, ActivityIndicator, ViewStyle } from 'react-native';
+import { TouchableOpacity, StyleSheet, ActivityIndicator, ViewStyle } from 'react-native';
 import { colors, spacing, radius, typography } from '@/lib/theme';
+import { ArabicText } from '@/components/ArabicText';
+import { t } from '@/lib/i18n';
 
 type Props = {
   title: string;
@@ -44,7 +46,7 @@ export function Button({
       {loading ? (
         <ActivityIndicator color={textColor} size="small" />
       ) : (
-        <Text style={[styles.text, { color: textColor }]}>{title}</Text>
+        <ArabicText style={[styles.text, { color: textColor }]}>{t(title)}</ArabicText>
       )}
     </TouchableOpacity>
   );

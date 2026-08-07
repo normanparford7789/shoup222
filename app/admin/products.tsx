@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -11,7 +10,6 @@ import {
   Image,
   Alert,
   Modal,
-  TextInput,
 } from 'react-native';
 import { router } from 'expo-router';
 import {
@@ -26,6 +24,7 @@ import {
   AlertTriangle,
 } from 'lucide-react-native';
 import { colors, spacing, radius, typography, shadows } from '@/lib/theme';
+import { ArabicText as Text, ArabicTextInput as TextInputArabic } from '@/components/ArabicText';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/Button';
 
@@ -156,7 +155,7 @@ export default function AdminProductsScreen() {
       <View style={styles.searchRow}>
         <View style={styles.searchInput}>
           <Search size={18} color={colors.neutral[400]} />
-          <TextInput
+          <TextInputArabic
             style={styles.searchField}
             placeholder="Search by name, category, or merchant…"
             value={search}

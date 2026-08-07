@@ -1,6 +1,8 @@
-import { View, Text, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import type { ReactNode } from 'react';
 import { colors, spacing, typography } from '@/lib/theme';
+import { ArabicText } from '@/components/ArabicText';
+import { t } from '@/lib/i18n';
 
 type Props = {
   icon?: ReactNode;
@@ -13,8 +15,8 @@ export function EmptyState({ icon, title, message, action }: Props) {
   return (
     <View style={styles.container}>
       {icon}
-      <Text style={styles.title}>{title}</Text>
-      {message ? <Text style={styles.message}>{message}</Text> : null}
+      <ArabicText style={styles.title}>{t(title)}</ArabicText>
+      {message ? <ArabicText style={styles.message}>{t(message)}</ArabicText> : null}
       {action}
     </View>
   );

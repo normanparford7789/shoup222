@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -9,7 +8,6 @@ import {
   RefreshControl,
   ActivityIndicator,
   Modal,
-  TextInput,
   Alert,
 } from 'react-native';
 import { router } from 'expo-router';
@@ -31,6 +29,7 @@ import {
   CreditCard,
 } from 'lucide-react-native';
 import { colors, spacing, radius, typography, shadows } from '@/lib/theme';
+import { ArabicText as Text, ArabicTextInput as TextInputArabic } from '@/components/ArabicText';
 import { useAuth } from '@/lib/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/Button';
@@ -445,7 +444,7 @@ export default function AdminWithdrawalsScreen() {
       {/* Search bar */}
       <View style={styles.searchContainer}>
         <Search size={18} color={colors.neutral[400]} />
-        <TextInput
+        <TextInputArabic
           style={styles.searchInput}
           placeholder="Search by publisher name…"
           value={search}
@@ -667,7 +666,7 @@ export default function AdminWithdrawalsScreen() {
             </View>
 
             <Text style={styles.notesLabel}>Admin Notes (Optional)</Text>
-            <TextInput
+            <TextInputArabic
               style={[styles.notesInput, styles.textArea]}
               placeholder="Any notes to include with the payment notifications…"
               value={adminNotes}
