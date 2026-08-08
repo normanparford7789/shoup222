@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   FlatList,
   TouchableOpacity,
@@ -16,6 +15,8 @@ import { ProductCard } from '@/components/ProductCard';
 import { LoadingState } from '@/components/LoadingState';
 import { EmptyState } from '@/components/EmptyState';
 import type { Product, Category } from '@/lib/supabase';
+import { ArabicText as Text } from '@/components/ArabicText';
+import { t } from '@/lib/i18n';
 
 type SortOption = 'newest' | 'price_asc' | 'price_desc' | 'rating';
 

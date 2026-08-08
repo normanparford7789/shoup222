@@ -1,12 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   FlatList,
   TouchableOpacity,
   SafeAreaView,
-  TextInput,
   Alert,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -18,6 +16,8 @@ import { LoadingState } from '@/components/LoadingState';
 import { EmptyState } from '@/components/EmptyState';
 import { Button } from '@/components/Button';
 import type { Review, Product } from '@/lib/supabase';
+import { ArabicText as Text, ArabicTextInput as TextInput } from '@/components/ArabicText';
+import { t } from '@/lib/i18n';
 
 export default function ReviewsScreen() {
   const { slug } = useLocalSearchParams<{ slug: string }>();
@@ -56,12 +56,12 @@ export default function ReviewsScreen() {
 
   const submitReview = async () => {
     if (!user) {
-      Alert.alert('Sign in required', 'Please sign in to leave a review.');
+      Alert.alert(t('Sign in required'), t('Please sign in to leave a review.'));
       return;
     }
     if (!product) return;
     if (!body.trim()) {
-      Alert.alert('Review required', 'Please write your review');
+      Alert.alert(t('Review required'), t('Please write your review'));
       return;
     }
     setSubmitting(true);
@@ -74,10 +74,10 @@ export default function ReviewsScreen() {
     });
     setSubmitting(false);
     if (error) {
-      Alert.alert('Error', error.message);
+      Alert.alert(t('Error'), error.message);
       return;
     }
-    Alert.alert('Success', 'Your review has been submitted!');
+    Alert.alert(t('Success'), t('Your review has been submitted!'));
     setTitle('');
     setBody('');
     setRating(5);

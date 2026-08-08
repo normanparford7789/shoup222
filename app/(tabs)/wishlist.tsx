@@ -1,11 +1,18 @@
 import { router } from 'expo-router';
-import { View, Text, StyleSheet, FlatList, SafeAreaView } from 'react-native';
+import {
+  View,
+  StyleSheet,
+  FlatList,
+  SafeAreaView,
+} from 'react-native';
 import { Heart } from 'lucide-react-native';
 import { colors, spacing, radius, typography } from '@/lib/theme';
 import { useWishlist } from '@/lib/WishlistContext';
 import { ProductCard } from '@/components/ProductCard';
 import { EmptyState } from '@/components/EmptyState';
 import { Button } from '@/components/Button';
+import { ArabicText as Text } from '@/components/ArabicText';
+import { t } from '@/lib/i18n';
 
 export default function WishlistScreen() {
   const { items, loading } = useWishlist();

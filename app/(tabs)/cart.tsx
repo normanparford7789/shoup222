@@ -1,14 +1,12 @@
 import { useState, useCallback } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
   Image,
   SafeAreaView,
   Alert,
-  TextInput,
 } from 'react-native';
 import { router } from 'expo-router';
 import { ShoppingBag, Minus, Plus, Trash2, Tag, ChevronRight, X } from 'lucide-react-native';
@@ -19,6 +17,8 @@ import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/Button';
 import { EmptyState } from '@/components/EmptyState';
 import type { Coupon } from '@/lib/supabase';
+import { ArabicText as Text, ArabicTextInput as TextInput } from '@/components/ArabicText';
+import { t } from '@/lib/i18n';
 
 export default function CartScreen() {
   const { items, loading, updateQuantity, removeItem, clearCart, subtotal } = useCart();
@@ -69,9 +69,9 @@ export default function CartScreen() {
 
   const handleCheckout = () => {
     if (!user) {
-      Alert.alert('Sign in required', 'Please sign in to checkout.', [
-        { text: 'Sign In', onPress: () => router.push('/auth/login') },
-        { text: 'Cancel', style: 'cancel' },
+      Alert.alert(t('Sign in required'), t('Please sign in to checkout.'), [
+        { text: t('Sign In'), onPress: () => router.push('/auth/login') },
+        { text: t('Cancel'), style: 'cancel' },
       ]);
       return;
     }
@@ -79,9 +79,9 @@ export default function CartScreen() {
   };
 
   const handleClearCart = () => {
-    Alert.alert('Clear Cart', 'Remove all items from cart?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Clear', style: 'destructive', onPress: clearCart },
+    Alert.alert(t('Clear Cart'), t('Remove all items from cart?'), [
+      { text: t('Cancel'), style: 'cancel' },
+      { text: t('Clear'), style: 'destructive', onPress: clearCart },
     ]);
   };
 

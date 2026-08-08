@@ -1,13 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
   SafeAreaView,
   Alert,
-  TextInput,
   Modal,
   FlatList,
   RefreshControl,
@@ -28,6 +26,8 @@ import { supabase } from '@/lib/supabase';
 import { LoadingState } from '@/components/LoadingState';
 import { EmptyState } from '@/components/EmptyState';
 import { Button } from '@/components/Button';
+import { ArabicText as Text, ArabicTextInput as TextInput } from '@/components/ArabicText';
+import { t } from '@/lib/i18n';
 
 type WalletData = {
   id: string;
@@ -106,7 +106,7 @@ export default function CustomerWalletScreen() {
   const handleTopUp = async () => {
     const amount = parseFloat(topUpAmount);
     if (!amount || amount <= 0) {
-      Alert.alert('Invalid amount', 'Please enter a valid amount');
+      Alert.alert(t('Invalid amount'), t('Please enter a valid amount'));
       return;
     }
 
@@ -114,7 +114,7 @@ export default function CustomerWalletScreen() {
     try {
       const w = await ensureWallet();
       if (!w) {
-        Alert.alert('Error', 'Could not access wallet');
+        Alert.alert(t('Error'), t('Could not access wallet'));
         return;
       }
 
@@ -139,11 +139,11 @@ export default function CustomerWalletScreen() {
       setProcessing(false);
       setShowTopUp(false);
       setTopUpAmount('');
-      Alert.alert('Success', `$${amount.toFixed(2)} added to your wallet`);
+      Alert.alert(t('Success'), `${t('Added to your wallet')}: $${amount.toFixed(2)}`);
       await load();
     } catch (e: any) {
       setProcessing(false);
-      Alert.alert('Error', e.message ?? 'Failed to top up wallet');
+      Alert.alert(t('Error'), e.message ?? t('Failed to top up wallet'));
     }
   };
 

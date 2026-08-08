@@ -1,12 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
   SafeAreaView,
-  TextInput,
   Alert,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -17,6 +15,8 @@ import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/Button';
 import { LoadingState } from '@/components/LoadingState';
 import type { Order, OrderItem } from '@/lib/supabase';
+import { ArabicText as Text, ArabicTextInput as TextInput } from '@/components/ArabicText';
+import { t } from '@/lib/i18n';
 
 const REASONS = [
   { key: 'size_issue', label: 'Size doesn\'t fit' },
@@ -56,11 +56,11 @@ export default function ReturnsScreen() {
   const submit = async () => {
     if (!user || !order) return;
     if (!selectedItem) {
-      Alert.alert('Select item', 'Please select an item to return');
+      Alert.alert(t('Select item'), t('Please select an item to return'));
       return;
     }
     if (!reason) {
-      Alert.alert('Select reason', 'Please select a reason for return');
+      Alert.alert(t('Select reason'), t('Please select a reason for return'));
       return;
     }
     setSubmitting(true);
@@ -74,11 +74,11 @@ export default function ReturnsScreen() {
     });
     setSubmitting(false);
     if (error) {
-      Alert.alert('Error', error.message);
+      Alert.alert(t('Error'), error.message);
       return;
     }
-    Alert.alert('Success', 'Your return request has been submitted. We will review it shortly.', [
-      { text: 'OK', onPress: () => router.back() },
+    Alert.alert(t('Success'), t('Your return request has been submitted. We will review it shortly.'), [
+      { text: t('OK'), onPress: () => router.back() },
     ]);
   };
 

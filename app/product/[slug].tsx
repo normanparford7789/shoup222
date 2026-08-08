@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -38,6 +37,8 @@ import { Button } from '@/components/Button';
 import { LoadingState } from '@/components/LoadingState';
 import { ProductCard } from '@/components/ProductCard';
 import type { Product, ProductVariant, Review, AffiliateLink } from '@/lib/supabase';
+import { ArabicText as Text } from '@/components/ArabicText';
+import { t } from '@/lib/i18n';
 
 const { width } = Dimensions.get('window');
 
@@ -124,26 +125,26 @@ export default function ProductDetailScreen() {
   const handleAddToCart = async () => {
     if (!product) return;
     if (!user) {
-      Alert.alert('Sign in required', 'Please sign in to add items to your cart.');
+      Alert.alert(t('Sign in required'), t('Please sign in to add items to your cart.'));
       return;
     }
     if (!selectedSize && variants.some(v => v.size)) {
-      Alert.alert('Select size', 'Please select a size first.');
+      Alert.alert(t('Select size'), t('Please select a size first.'));
       return;
     }
     if (!selectedColor && variants.some(v => v.color)) {
-      Alert.alert('Select color', 'Please select a color first.');
+      Alert.alert(t('Select color'), t('Please select a color first.'));
       return;
     }
     setAdding(true);
     try {
       await addToCart(product, selectedSize ?? 'One Size', selectedColor ?? 'Default', 1);
-      Alert.alert('Success', 'Added to cart!', [
-        { text: 'Continue Shopping', style: 'cancel' },
-        { text: 'View Cart', onPress: () => router.push('/(tabs)/cart') },
+      Alert.alert(t('Success'), t('Added to cart!'), [
+        { text: t('Continue Shopping'), style: 'cancel' },
+        { text: t('View Cart'), onPress: () => router.push('/(tabs)/cart') },
       ]);
     } catch (e: any) {
-      Alert.alert('Error', e.message ?? 'Failed to add to cart');
+      Alert.alert(t('Error'), e.message ?? t('Failed to add to cart'));
     } finally {
       setAdding(false);
     }
@@ -152,15 +153,15 @@ export default function ProductDetailScreen() {
   const handleBuyNow = async () => {
     if (!product) return;
     if (!user) {
-      Alert.alert('Sign in required', 'Please sign in to continue.');
+      Alert.alert(t('Sign in required'), t('Please sign in to continue.'));
       return;
     }
     if (!selectedSize && variants.some(v => v.size)) {
-      Alert.alert('Select size', 'Please select a size first.');
+      Alert.alert(t('Select size'), t('Please select a size first.'));
       return;
     }
     if (!selectedColor && variants.some(v => v.color)) {
-      Alert.alert('Select color', 'Please select a color first.');
+      Alert.alert(t('Select color'), t('Please select a color first.'));
       return;
     }
     setAdding(true);
@@ -168,7 +169,7 @@ export default function ProductDetailScreen() {
       await addToCart(product, selectedSize ?? 'One Size', selectedColor ?? 'Default', 1);
       router.push('/checkout');
     } catch (e: any) {
-      Alert.alert('Error', e.message ?? 'Failed to process');
+      Alert.alert(t('Error'), e.message ?? t('Failed to process'));
     } finally {
       setAdding(false);
     }

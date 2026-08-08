@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -10,6 +9,8 @@ import {
 import { router } from 'expo-router';
 import { ChevronLeft, Ruler } from 'lucide-react-native';
 import { colors, spacing, radius, typography, shadows } from '@/lib/theme';
+import { ArabicText as Text } from '@/components/ArabicText';
+import { t } from '@/lib/i18n';
 
 const SIZE_CHARTS: Record<string, { size: string; chest: string; waist: string; hips: string }[]> = {
   Tops: [

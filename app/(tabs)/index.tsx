@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -19,6 +18,8 @@ import { useAuth } from '@/lib/AuthContext';
 import { ProductCard } from '@/components/ProductCard';
 import { LoadingState } from '@/components/LoadingState';
 import type { Product, Category, Banner } from '@/lib/supabase';
+import { ArabicText as Text } from '@/components/ArabicText';
+import { t } from '@/lib/i18n';
 
 const { width } = Dimensions.get('window');
 const BANNER_HEIGHT = 200;

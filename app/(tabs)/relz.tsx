@@ -1,14 +1,12 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   FlatList,
   Dimensions,
   TouchableOpacity,
   SafeAreaView,
   Modal,
-  TextInput,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
@@ -24,6 +22,8 @@ import { useCart } from '@/lib/CartContext';
 import { colors, spacing, radius, typography } from '@/lib/theme';
 import { router } from 'expo-router';
 import type { Reel, ReelComment, Product } from '@/lib/supabase';
+import { ArabicText as Text, ArabicTextInput as TextInput } from '@/components/ArabicText';
+import { t } from '@/lib/i18n';
 
 const { width, height } = Dimensions.get('window');
 

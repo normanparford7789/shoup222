@@ -1,13 +1,11 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
   Image,
   SafeAreaView,
-  TextInput,
   FlatList,
   RefreshControl,
   ActivityIndicator,
@@ -20,6 +18,8 @@ import { ProductCard } from '@/components/ProductCard';
 import { LoadingState } from '@/components/LoadingState';
 import { EmptyState } from '@/components/EmptyState';
 import type { Category, Product } from '@/lib/supabase';
+import { ArabicText as Text, ArabicTextInput as TextInput } from '@/components/ArabicText';
+import { t } from '@/lib/i18n';
 
 export default function BrowseScreen() {
   const [categories, setCategories] = useState<Category[]>([]);

@@ -1,12 +1,10 @@
 import { useState } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
   SafeAreaView,
-  TextInput,
   Alert,
 } from 'react-native';
 import { router } from 'expo-router';
@@ -23,6 +21,8 @@ import { colors, spacing, radius, typography, shadows } from '@/lib/theme';
 import { useAuth } from '@/lib/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/Button';
+import { ArabicText as Text, ArabicTextInput as TextInput } from '@/components/ArabicText';
+import { t } from '@/lib/i18n';
 
 const FAQS = [
   { q: 'How long does shipping take?', a: 'Standard shipping takes 5-7 business days. Express shipping takes 2-3 business days.' },
@@ -42,11 +42,11 @@ export default function SupportScreen() {
 
   const submitTicket = async () => {
     if (!subject.trim() || !message.trim()) {
-      Alert.alert('Missing info', 'Please fill in subject and message');
+      Alert.alert(t('Missing info'), t('Please fill in subject and message'));
       return;
     }
     if (!user) {
-      Alert.alert('Sign in required', 'Please sign in to submit a support ticket.');
+      Alert.alert(t('Sign in required'), t('Please sign in to submit a support ticket.'));
       return;
     }
     setSending(true);
@@ -58,10 +58,10 @@ export default function SupportScreen() {
     });
     setSending(false);
     if (error) {
-      Alert.alert('Error', error.message);
+      Alert.alert(t('Error'), error.message);
       return;
     }
-    Alert.alert('Success', 'Your support ticket has been submitted. We will get back to you soon.');
+    Alert.alert(t('Success'), t('Your support ticket has been submitted. We will get back to you soon.'));
     setSubject('');
     setMessage('');
   };
