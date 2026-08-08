@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -15,6 +14,8 @@ import { colors, spacing, radius, typography, shadows } from '@/lib/theme';
 import { supabase } from '@/lib/supabase';
 import { EmptyState } from '@/components/EmptyState';
 import type { Order, OrderItem } from '@/lib/supabase';
+import { ArabicText as Text } from '@/components/ArabicText';
+import { t } from '@/lib/i18n';
 
 type InvoiceOrder = Order & { order_items: OrderItem[] };
 

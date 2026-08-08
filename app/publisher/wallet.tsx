@@ -26,7 +26,7 @@ import {
   Info,
 } from 'lucide-react-native';
 import { colors, spacing, radius, typography, shadows } from '@/lib/theme';
-import { ArabicText as Text } from '@/components/ArabicText';
+import { ArabicText as Text, ArabicTextInput as TextInputArabic } from '@/components/ArabicText';
 import { useAuth } from '@/lib/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/Button';

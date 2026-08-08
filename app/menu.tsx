@@ -1,4 +1,10 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView } from 'react-native';
+import {
+  View,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  SafeAreaView,
+} from 'react-native';
 import { router } from 'expo-router';
 import {
   ChevronLeft,
@@ -17,6 +23,8 @@ import {
 } from 'lucide-react-native';
 import { colors, spacing, radius, typography, shadows } from '@/lib/theme';
 import { useAuth } from '@/lib/AuthContext';
+import { ArabicText as Text } from '@/components/ArabicText';
+import { t } from '@/lib/i18n';
 
 export default function MenuScreen() {
   const { user, signOut } = useAuth();

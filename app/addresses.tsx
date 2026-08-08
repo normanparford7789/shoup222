@@ -1,12 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   FlatList,
   TouchableOpacity,
   SafeAreaView,
-  TextInput,
   Alert,
   RefreshControl,
   ScrollView,
@@ -20,6 +18,8 @@ import { LoadingState } from '@/components/LoadingState';
 import { EmptyState } from '@/components/EmptyState';
 import { Button } from '@/components/Button';
 import type { Address } from '@/lib/supabase';
+import { ArabicText as Text, ArabicTextInput as TextInput } from '@/components/ArabicText';
+import { t } from '@/lib/i18n';
 
 export default function AddressesScreen() {
   const { user } = useAuth();
@@ -82,7 +82,7 @@ export default function AddressesScreen() {
   const save = async () => {
     if (!user) return;
     if (!form.full_name.trim() || !form.phone.trim() || !form.country.trim() || !form.city.trim() || !form.street.trim()) {
-      Alert.alert('Missing info', 'Please fill in all required fields');
+      Alert.alert(t('Missing info'), t('Please fill in all required fields'));
       return;
     }
     setSaving(true);
@@ -124,15 +124,15 @@ export default function AddressesScreen() {
 
   const remove = (addr: Address) => {
     Alert.alert(
-      'Delete Address',
-      'Are you sure you want to delete this address?',
+      t('Delete Address'),
+      t('Are you sure you want to delete this address?'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('Cancel'), style: 'cancel' },
         {
-          text: 'Delete',
+          text: t('Delete'),
           style: 'destructive',
           onPress: async () => {
-            await supabase.from('addresses').delete().eq('id', addr.id);
+            await supabase.from(t('addresses')).delete().eq(t('id'), addr.id);
             await load();
           },
         },

@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   FlatList,
   TouchableOpacity,
@@ -17,6 +16,8 @@ import { LoadingState } from '@/components/LoadingState';
 import { EmptyState } from '@/components/EmptyState';
 import { Button } from '@/components/Button';
 import type { Order } from '@/lib/supabase';
+import { ArabicText as Text } from '@/components/ArabicText';
+import { t } from '@/lib/i18n';
 
 const STATUS_COLORS: Record<string, string> = {
   pending: colors.warning[500],

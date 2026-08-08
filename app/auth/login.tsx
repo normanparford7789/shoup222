@@ -1,9 +1,7 @@
 import { useState } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
-  TextInput,
   TouchableOpacity,
   SafeAreaView,
   KeyboardAvoidingView,
@@ -16,6 +14,8 @@ import { GoogleSign } from '@/components/GoogleSign';
 import { colors, spacing, radius, typography, shadows } from '@/lib/theme';
 import { useAuth } from '@/lib/AuthContext';
 import { Button } from '@/components/Button';
+import { ArabicText as Text, ArabicTextInput as TextInput } from '@/components/ArabicText';
+import { t } from '@/lib/i18n';
 
 export default function LoginScreen() {
   const { signIn, signInWithGoogle } = useAuth();
@@ -27,7 +27,7 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     if (!email.trim() || !password) {
-      setError('Please enter email and password');
+      setError(t('Please enter email and password'));
       return;
     }
     setLoading(true);
@@ -93,7 +93,7 @@ export default function LoginScreen() {
           </View>
           <TouchableOpacity
             style={styles.forgotBtn}
-            onPress={() => Alert.alert('Reset Password', 'Contact support to reset your password.')}
+            onPress={() => Alert.alert(t('Reset Password'), t('Contact support to reset your password.'))}
           >
             <Text style={styles.forgotText}>Forgot Password?</Text>
           </TouchableOpacity>

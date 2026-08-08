@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -31,6 +30,8 @@ import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/Button';
 import { EmptyState } from '@/components/EmptyState';
 import type { Governorate, ShippingBranch } from '@/lib/supabase';
+import { ArabicText as Text } from '@/components/ArabicText';
+import { t } from '@/lib/i18n';
 
 type PaymentMethod = 'wallet' | 'cash_on_delivery' | 'card' | 'transfer';
 
@@ -97,21 +98,21 @@ export default function CheckoutScreen() {
 
   const placeOrder = useCallback(async () => {
     if (!user) {
-      Alert.alert('Sign in required', 'Please sign in to place an order.');
+      Alert.alert(t('Sign in required'), t('Please sign in to place an order.'));
       return;
     }
     if (!selectedBranch) {
-      Alert.alert('Branch required', 'Please select a shipping branch.');
+      Alert.alert(t('Branch required'), t('Please select a shipping branch.'));
       return;
     }
     if (items.length === 0) {
-      Alert.alert('Empty cart', 'Add items to your cart first.');
+      Alert.alert(t('Empty cart'), t('Add items to your cart first.'));
       return;
     }
     if (paymentMethod === 'wallet' && walletBalance < upfrontAmount) {
       Alert.alert(
-        'Insufficient wallet balance',
-        `Your wallet balance ($${walletBalance.toFixed(2)}) is not enough for the 25% upfront payment ($${upfrontAmount.toFixed(2)}). Please top up your wallet or choose another payment method.`
+        t('Insufficient wallet balance'),
+        `رصيد محفظتك ($${walletBalance.toFixed(2)}) لا يكفي لدفعة الـ 25% المقدمة ($${upfrontAmount.toFixed(2)}). يرجى شحن محفظتك أو اختيار طريقة دفع أخرى.`
       );
       return;
     }
@@ -225,12 +226,12 @@ export default function CheckoutScreen() {
       // Clear stored affiliate ref after order is placed
       if (affiliateCode) { try { await AsyncStorage.removeItem('affiliate_ref'); } catch {} }
       Alert.alert(
-        'Order Placed!',
-        `Order ${orderNumber} placed.\n25% upfront: $${upfrontAmount.toFixed(2)}\nDue on delivery: $${remainingAmount.toFixed(2)}\nInvoice: ${invoiceNumber}`,
-        [{ text: 'View Invoice', onPress: () => router.replace(`/invoice/${order.id}`) }]
+        t('Order Placed!'),
+        `تم إنشاء الطلب ${orderNumber}.\nالمدفوع مقدمًا 25%: $${upfrontAmount.toFixed(2)}\nالمستحق عند التسليم: $${remainingAmount.toFixed(2)}\nالفاتورة: ${invoiceNumber}`,
+        [{ text: t('View Invoice'), onPress: () => router.replace(`/invoice/${order.id}`) }]
       );
     } catch (e: any) {
-      Alert.alert('Error', e.message ?? 'Failed to place order');
+      Alert.alert(t('Error'), e.message ?? t('Failed to place order'));
     } finally {
       setPlacing(false);
     }

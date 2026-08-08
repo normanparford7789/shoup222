@@ -378,7 +378,7 @@ const styles = StyleSheet.create({
   reelOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'transparent',
-    background: 'linear-gradient(to bottom, transparent 40%, rgba(0,0,0,0.85) 100%)' as any,
+    ...({ background: 'linear-gradient(to bottom, transparent 40%, rgba(0,0,0,0.85) 100%)' } as any),
   },
   playIndicator: {
     ...StyleSheet.absoluteFillObject,

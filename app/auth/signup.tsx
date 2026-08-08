@@ -1,9 +1,7 @@
 import { useState } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
-  TextInput,
   TouchableOpacity,
   SafeAreaView,
   KeyboardAvoidingView,
@@ -17,6 +15,8 @@ import { colors, spacing, radius, typography } from '@/lib/theme';
 import { useAuth } from '@/lib/AuthContext';
 import { Button } from '@/components/Button';
 import type { UserRole } from '@/lib/supabase';
+import { ArabicText as Text, ArabicTextInput as TextInput } from '@/components/ArabicText';
+import { t } from '@/lib/i18n';
 
 export default function SignupScreen() {
   const { signUp, signInWithGoogle } = useAuth();
@@ -31,15 +31,15 @@ export default function SignupScreen() {
 
   const handleSignup = async () => {
     if (!fullName.trim() || !email.trim() || !password) {
-      setError('Please fill in all fields');
+      setError(t('Please fill in all fields'));
       return;
     }
     if (password !== confirmPassword) {
-      setError('Passwords do not match');
+      setError(t('Passwords do not match'));
       return;
     }
     if (password.length < 6) {
-      setError('Password must be at least 6 characters');
+      setError(t('Password must be at least 6 characters'));
       return;
     }
     setLoading(true);

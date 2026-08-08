@@ -213,7 +213,7 @@ export default function AdminWithdrawalsScreen() {
         .order('created_at', { ascending: false })
         .limit(20);
 
-      setRecentPayments((paymentsData ?? []) as RecentPayment[]);
+      setRecentPayments((paymentsData ?? []) as unknown as RecentPayment[]);
     } catch (e: any) {
       setError(e.message || 'Failed to load publisher data');
     }

@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -16,6 +15,8 @@ import { supabase } from '@/lib/supabase';
 import { LoadingState } from '@/components/LoadingState';
 import { EmptyState } from '@/components/EmptyState';
 import type { Coupon } from '@/lib/supabase';
+import { ArabicText as Text } from '@/components/ArabicText';
+import { t } from '@/lib/i18n';
 
 export default function CouponsScreen() {
   const [coupons, setCoupons] = useState<Coupon[]>([]);

@@ -1,12 +1,10 @@
 import { useState } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
   SafeAreaView,
-  TextInput,
   Alert,
   Image,
 } from 'react-native';
@@ -16,6 +14,8 @@ import { colors, spacing, radius, typography, shadows } from '@/lib/theme';
 import { useAuth } from '@/lib/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/Button';
+import { ArabicText as Text, ArabicTextInput as TextInput } from '@/components/ArabicText';
+import { t } from '@/lib/i18n';
 
 export default function ProfileScreen() {
   const { user, profile, refreshProfile, signOut } = useAuth();
@@ -37,11 +37,11 @@ export default function ProfileScreen() {
       });
     setSaving(false);
     if (error) {
-      Alert.alert('Error', error.message);
+      Alert.alert(t('Error'), error.message);
       return;
     }
     await refreshProfile();
-    Alert.alert('Success', 'Profile updated successfully');
+    Alert.alert(t('Success'), t('Profile updated successfully'));
   };
 
   return (
@@ -90,7 +90,7 @@ export default function ProfileScreen() {
         <View style={styles.menuCard}>
           <TouchableOpacity
             style={styles.menuItem}
-            onPress={() => Alert.alert('Change Password', 'Contact support to change your password.')}
+            onPress={() => Alert.alert(t('Change Password'), t('Contact support to change your password.'))}
           >
             <View style={styles.menuIcon}>
               <Lock size={20} color={colors.primary[600]} />

@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -27,6 +26,8 @@ import { supabase } from '@/lib/supabase';
 import { LoadingState } from '@/components/LoadingState';
 import { Button } from '@/components/Button';
 import type { Order } from '@/lib/supabase';
+import { ArabicText as Text } from '@/components/ArabicText';
+import { t } from '@/lib/i18n';
 
 const STATUS_STEPS = [
   { key: 'pending', label: 'Order Placed', icon: CheckCircle },
@@ -79,15 +80,15 @@ export default function OrderDetailScreen() {
 
   const handleCancel = () => {
     Alert.alert(
-      'Cancel Order',
-      'Are you sure you want to cancel this order?',
+      t('Cancel Order'),
+      t('Are you sure you want to cancel this order?'),
       [
-        { text: 'No', style: 'cancel' },
+        { text: t('No'), style: 'cancel' },
         {
-          text: 'Yes, Cancel',
+          text: t('Yes, Cancel'),
           style: 'destructive',
           onPress: async () => {
-            await supabase.from('orders').update({ status: 'cancelled' }).eq('id', order.id);
+            await supabase.from(t('orders')).update({ status: t('cancelled') }).eq(t('id'), order.id);
             await load();
           },
         },
