@@ -89,6 +89,7 @@ export type Order = {
   upfront_amount: number;
   remaining_amount: number;
   invoice_number: string | null;
+  invoice_issued_at?: string | null;
   shipping_branch_id: string | null;
   coupon_code: string | null;
   shipping_address: any;
@@ -233,6 +234,7 @@ export type Profile = {
   default_currency: string;
   default_language: string;
   role: UserRole;
+  ref_code?: string | null;
   is_banned: boolean;
   is_active: boolean;
   admin_notes: string | null;

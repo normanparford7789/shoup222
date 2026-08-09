@@ -6,50 +6,33 @@ import { colors, spacing } from '@/lib/theme';
 import { ArabicText as Text } from '@/components/ArabicText';
 import { EmptyState } from '@/components/EmptyState';
 import { InvoiceView } from '@/components/InvoiceView';
-import {
-  fetchInvoiceByToken,
-  fetchInvoiceToken,
-  isValidInvoiceToken,
-  type Invoice,
-  type InvoiceKind,
-} from '@/lib/invoice';
+import { fetchInvoiceByToken, isValidInvoiceToken, type Invoice } from '@/lib/invoice';
 
 /**
- * Internal invoice screen (customer / merchant / admin).
+ * Public invoice page — this is the exact destination encoded in the QR code:
+ *   <site>/inv/<32-char-token>
  *
- * `id` is the order id (default) or the withdrawal id when `kind=withdrawal`.
- * The screen resolves the secret QR token through a SECURITY DEFINER RPC that
- * only answers for the invoice owner, the order's merchant, or an admin.
+ * Anyone holding the printed invoice can open it, but nothing else is
+ * reachable: the token is unguessable and the server returns a masked,
+ * whitelisted projection for non-privileged viewers.
  */
-export default function InvoiceScreen() {
-  const params = useLocalSearchParams<{ id: string; kind?: string }>();
-  const id = params.id;
-  const kind: InvoiceKind = params.kind === 'withdrawal' ? 'withdrawal' : 'order';
-
+export default function PublicInvoiceScreen() {
+  const { token } = useLocalSearchParams<{ token: string }>();
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [loading, setLoading] = useState(true);
-  const [denied, setDenied] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
-    setDenied(false);
     try {
-      if (!id) {
+      if (!isValidInvoiceToken(token)) {
         setInvoice(null);
-        return;
-      }
-      // `id` may already be a QR token when the screen is opened from a scan.
-      const token = isValidInvoiceToken(id) ? id : await fetchInvoiceToken(kind, id);
-      if (!token) {
-        setInvoice(null);
-        setDenied(true);
         return;
       }
       setInvoice(await fetchInvoiceByToken(token));
     } finally {
       setLoading(false);
     }
-  }, [id, kind]);
+  }, [token]);
 
   useEffect(() => {
     load();
@@ -58,7 +41,7 @@ export default function InvoiceScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.iconBtn} onPress={() => router.replace('/')}>
           <ChevronLeft size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.title}>الفاتورة</Text>
@@ -71,12 +54,8 @@ export default function InvoiceScreen() {
         <InvoiceView invoice={invoice} />
       ) : (
         <EmptyState
-          title={denied ? 'لا تملك صلاحية عرض هذه الفاتورة' : 'الفاتورة غير موجودة'}
-          message={
-            denied
-              ? 'يمكن للزبون والتاجر والإدارة فقط عرض هذه الفاتورة.'
-              : 'قد تكون هذه الفاتورة قد حُذفت.'
-          }
+          title="الفاتورة غير موجودة"
+          message="رمز الفاتورة غير صالح أو تم حذف الفاتورة."
         />
       )}
     </SafeAreaView>

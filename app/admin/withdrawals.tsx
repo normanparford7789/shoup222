@@ -583,7 +583,11 @@ export default function AdminWithdrawalsScreen() {
             </Text>
             <View style={{ gap: spacing.sm }}>
               {recentPayments.map((p) => (
-                <View key={p.id} style={styles.recentCard}>
+                <TouchableOpacity
+                  key={p.id}
+                  style={styles.recentCard}
+                  onPress={() => router.push(`/invoice/${p.id}?kind=withdrawal`)}
+                >
                   <View style={styles.recentLeft}>
                     <CheckCircle2 size={18} color={colors.success[600]} />
                     <View>
@@ -599,7 +603,7 @@ export default function AdminWithdrawalsScreen() {
                       <Text style={styles.recentInvoice}>{p.invoice_number}</Text>
                     ) : null}
                   </View>
-                </View>
+                </TouchableOpacity>
               ))}
             </View>
           </>

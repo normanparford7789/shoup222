@@ -141,6 +141,14 @@ export default function MerchantWithdrawalsScreen() {
           </View>
         ) : null}
 
+        {/* Secure QR invoice */}
+        <TouchableOpacity
+          style={styles.qrInvoiceBtn}
+          onPress={() => router.push(`/invoice/${item.id}?kind=withdrawal`)}
+        >
+          <Text style={styles.qrInvoiceBtnText}>عرض الفاتورة الكاملة (QR / PDF)</Text>
+        </TouchableOpacity>
+
         {/* Payment info */}
         <View style={styles.paymentInfoBox}>
           <Text style={styles.paymentInfoLabel}>Payment Info</Text>
@@ -309,6 +317,19 @@ export default function MerchantWithdrawalsScreen() {
 }
 
 const styles = StyleSheet.create({
+  qrInvoiceBtn: {
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: colors.neutral[900],
+    borderRadius: radius.md,
+    paddingVertical: 11,
+    alignItems: 'center',
+  },
+  qrInvoiceBtnText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: colors.neutral[900],
+  },
   container: {
     flex: 1,
     backgroundColor: colors.background,
