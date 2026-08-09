@@ -38,7 +38,7 @@ type PaymentMethod = 'wallet' | 'cash_on_delivery' | 'card' | 'transfer';
 const UPFRONT_PERCENTAGE = 0.25;
 
 export default function CheckoutScreen() {
-  const { items, subtotal, clearCart } = useCart();
+  const { items, subtotal, clearCart, loading: cartLoading } = useCart();
   const { user } = useAuth();
   const [governorates, setGovernorates] = useState<Governorate[]>([]);
   const [branches, setBranches] = useState<ShippingBranch[]>([]);
@@ -241,7 +241,7 @@ export default function CheckoutScreen() {
     walletBalance, clearCart,
   ]);
 
-  if (loading) {
+  if (loading || cartLoading) {
     return (
       <SafeAreaView style={styles.container}>
         <ActivityIndicator size="large" color={colors.primary[600]} style={{ flex: 1 }} />
