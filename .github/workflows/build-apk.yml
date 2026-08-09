@@ -32,10 +32,12 @@ jobs:
       - name: Install dependencies
         run: |
           for attempt in 1 2 3; do
-            npm install && break
+            npm install --legacy-peer-deps && exit 0
             echo "npm install failed (attempt $attempt), retrying..."
             sleep 10
           done
+          echo "npm install failed after 3 attempts"
+          exit 1
       - name: Fix Expo SDK dependency versions
         run: npx expo install --fix
       - name: Create .env file
@@ -79,10 +81,12 @@ jobs:
       - name: Install dependencies
         run: |
           for attempt in 1 2 3; do
-            npm install && break
+            npm install --legacy-peer-deps && exit 0
             echo "npm install failed (attempt $attempt), retrying..."
             sleep 10
           done
+          echo "npm install failed after 3 attempts"
+          exit 1
       - name: Fix Expo SDK dependency versions
         run: npx expo install --fix
       - name: Create .env file
