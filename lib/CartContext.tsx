@@ -17,13 +17,14 @@ type CartContextType = {
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export function CartProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [items, setItems] = useState<CartItem[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const fetchCart = async () => {
     if (!user) {
       setItems([]);
+      setLoading(false);
       return;
     }
     setLoading(true);
@@ -39,8 +40,15 @@ export function CartProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
+    // Wait until auth has resolved (session restored) before deciding the
+    // cart is empty — otherwise we briefly report an empty cart while the
+    // user's session is still loading (most noticeable on web).
+    if (authLoading) {
+      setLoading(true);
+      return;
+    }
     fetchCart();
-  }, [user?.id]);
+  }, [user?.id, authLoading]);
 
   const addToCart = async (product: Product, size: string, color: string, quantity = 1) => {
     if (!user) throw new Error('Please sign in to add items to cart');
