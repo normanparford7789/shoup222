@@ -117,7 +117,7 @@ export default function ProfileScreen() {
           title="Sign Out"
           onPress={() => {
             signOut();
-            router.replace('/(tabs)/index');
+            router.replace('/(tabs)');
           }}
           variant="outline"
           fullWidth
