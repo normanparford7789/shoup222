@@ -175,6 +175,7 @@ export default function CheckoutScreen() {
           affiliateUserId = affLink?.user_id ?? null;
         }
       } catch {}
+      console.log('[placeOrder] affiliate check done', { affiliateCode, affiliateUserId });
 
       const orderNumber = `ORD-${Date.now().toString().slice(-8)}`;
       const invoiceNumber = `INV-${Date.now().toString().slice(-10)}`;
@@ -184,6 +185,14 @@ export default function CheckoutScreen() {
         branch_address: selectedBranch.address,
         branch_phone: selectedBranch.phone,
       };
+      console.log('[placeOrder] about to insert order', {
+        orderNumber, invoiceNumber, shippingInfo,
+        payload: {
+          user_id: user.id, subtotal, shipping_cost: shippingCost, tax, total,
+          upfront_amount: upfrontAmount, remaining_amount: remainingAmount,
+          shipping_branch_id: selectedBranch.id, payment_method: paymentMethod,
+        },
+      });
 
       const { data: order, error: orderError } = await supabase
         .from('orders')
@@ -208,6 +217,7 @@ export default function CheckoutScreen() {
         .select()
         .single();
 
+      console.log('[placeOrder] order insert result', { order, orderError });
       if (orderError) throw orderError;
 
       const orderItems = currentItems.map((item: any) => ({
@@ -221,12 +231,15 @@ export default function CheckoutScreen() {
         unit_price: item.product?.price ?? 0,
         subtotal: (item.product?.price ?? 0) * item.quantity,
       }));
+      console.log('[placeOrder] about to insert order_items', orderItems);
 
       const { error: itemsError } = await supabase.from('order_items').insert(orderItems);
+      console.log('[placeOrder] order_items insert result', { itemsError });
       if (itemsError) throw itemsError;
 
       // Process merchant and affiliate earnings
-      await supabase.rpc('process_order_merchant_earnings', { p_order_id: order.id });
+      const { error: earningsError } = await supabase.rpc('process_order_merchant_earnings', { p_order_id: order.id });
+      console.log('[placeOrder] process_order_merchant_earnings result', { earningsError });
 
       // If paying with wallet, deduct the 25% upfront
       if (paymentMethod === 'wallet') {
@@ -264,8 +277,10 @@ export default function CheckoutScreen() {
         body: `Your order ${orderNumber} has been placed. 25% ($${upfrontAmount.toFixed(2)}) paid upfront, remaining $${remainingAmount.toFixed(2)} due on delivery.`,
         data: { order_id: order.id, invoice_number: invoiceNumber },
       });
+      console.log('[placeOrder] notification inserted, about to clearCart()');
 
       await clearCart();
+      console.log('[placeOrder] clearCart() done — SUCCESS, order:', orderNumber);
       // Clear stored affiliate ref after order is placed
       if (affiliateCode) { try { await AsyncStorage.removeItem('affiliate_ref'); } catch {} }
       Alert.alert(
@@ -274,6 +289,13 @@ export default function CheckoutScreen() {
         [{ text: t('View Invoice'), onPress: () => router.replace(`/invoice/${order.id}`) }]
       );
     } catch (e: any) {
+      console.error('%c[placeOrder] CAUGHT ERROR', 'color:#f00;font-weight:bold', {
+        message: e?.message,
+        details: e?.details,
+        hint: e?.hint,
+        code: e?.code,
+        fullError: e,
+      });
       Alert.alert(t('Error'), e.message ?? t('Failed to place order'));
     } finally {
       setPlacing(false);
