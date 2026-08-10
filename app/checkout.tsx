@@ -97,32 +97,61 @@ export default function CheckoutScreen() {
   };
 
   const placeOrder = useCallback(async () => {
+    console.log('%c[placeOrder] START', 'color:#0af;font-weight:bold', {
+      user_id: user?.id ?? null,
+      user_email: user?.email ?? null,
+      contextItemsLength: items.length,
+      contextItemsSnapshot: items,
+      cartLoading,
+      selectedBranch,
+      selectedGovernorate,
+      paymentMethod,
+      subtotal, shippingCost, tax, total, upfrontAmount, remainingAmount,
+      walletBalance,
+    });
+
     if (!user) {
+      console.warn('[placeOrder] ABORT: no user (not signed in)');
       Alert.alert(t('Sign in required'), t('Please sign in to place an order.'));
       return;
     }
     if (!selectedBranch) {
+      console.warn('[placeOrder] ABORT: no selectedBranch');
       Alert.alert(t('Branch required'), t('Please select a shipping branch.'));
       return;
     }
     // Re-verify the cart directly from the database instead of trusting the
     // in-memory context value — this avoids false "empty cart" errors caused
     // by any client-side state timing issues (most noticeable on web).
-    const { data: freshItems, error: freshItemsError } = await supabase
+    console.log('[placeOrder] fetching fresh cart_items for user_id =', user.id);
+    const { data: freshItems, error: freshItemsError, status: freshItemsStatus } = await supabase
       .from('cart_items')
       .select(`*, product:products(*)`)
       .eq('user_id', user.id);
 
+    console.log('[placeOrder] fresh cart_items result', {
+      status: freshItemsStatus,
+      error: freshItemsError,
+      data: freshItems,
+      dataLength: freshItems?.length,
+    });
+
     if (freshItemsError) {
+      console.error('[placeOrder] ABORT: error fetching fresh cart items', freshItemsError);
       Alert.alert(t('Error'), freshItemsError.message);
       return;
     }
     const currentItems = (freshItems as any) ?? [];
 
     if (currentItems.length === 0) {
+      console.warn('[placeOrder] ABORT: currentItems.length === 0 — DB genuinely returned no rows for this user_id.', {
+        queriedUserId: user.id,
+        contextItemsAtThisMoment: items,
+      });
       Alert.alert(t('Empty cart'), t('Add items to your cart first.'));
       return;
     }
+    console.log('[placeOrder] cart OK, proceeding with', currentItems.length, 'item(s)');
     if (paymentMethod === 'wallet' && walletBalance < upfrontAmount) {
       Alert.alert(
         t('Insufficient wallet balance'),
@@ -250,7 +279,7 @@ export default function CheckoutScreen() {
       setPlacing(false);
     }
   }, [
-    user, selectedBranch, selectedGovernorate, governorates, subtotal,
+    user, selectedBranch, selectedGovernorate, governorates, subtotal, items, cartLoading,
     shippingCost, tax, total, upfrontAmount, remainingAmount, paymentMethod,
     walletBalance, clearCart,
   ]);
