@@ -119,7 +119,7 @@ export default function PublisherDashboardScreen() {
           <View style={{ marginTop: spacing.lg, width: '100%' }}>
             <Button
               title="Back to Home"
-              onPress={() => router.replace('/(tabs)/index')}
+              onPress={() => router.replace('/(tabs)')}
               fullWidth
             />
           </View>
@@ -320,7 +320,7 @@ export default function PublisherDashboardScreen() {
             title="Sign Out"
             onPress={() => {
               signOut();
-              router.replace('/(tabs)/index');
+              router.replace('/(tabs)');
             }}
             variant="outline"
             fullWidth
