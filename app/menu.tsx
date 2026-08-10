@@ -83,7 +83,7 @@ export default function MenuScreen() {
             style={styles.logoutBtn}
             onPress={() => {
               signOut();
-              router.replace('/(tabs)/index');
+              router.replace('/(tabs)');
             }}
           >
             <View style={[styles.menuIcon, { backgroundColor: colors.error[50] }]}>
