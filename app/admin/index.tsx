@@ -115,7 +115,7 @@ export default function AdminDashboardScreen() {
             You need administrator privileges to view this dashboard.
           </Text>
           <View style={{ marginTop: spacing.lg, width: '100%' }}>
-            <Button title="Back to Home" onPress={() => router.replace('/(tabs)/index')} fullWidth />
+            <Button title="Back to Home" onPress={() => router.replace('/(tabs)')} fullWidth />
           </View>
         </View>
       </SafeAreaView>
@@ -336,7 +336,7 @@ export default function AdminDashboardScreen() {
             title="Sign Out"
             onPress={() => {
               signOut();
-              router.replace('/(tabs)/index');
+              router.replace('/(tabs)');
             }}
             variant="outline"
             fullWidth
