@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -49,6 +49,12 @@ export default function CheckoutScreen() {
   const [walletBalance, setWalletBalance] = useState(0);
   const [loading, setLoading] = useState(true);
   const [placing, setPlacing] = useState(false);
+  // useRef gives us a synchronous, immediate lock — unlike `placing` state,
+  // which only updates on the *next* render. On web, TouchableOpacity can
+  // fire onPress twice for a single tap, and both calls would still see
+  // placing === false if we only relied on state, letting the order (and
+  // the cart-clear) run twice. The ref blocks the second call instantly.
+  const placingRef = useRef(false);
 
   const loadShippingData = useCallback(async () => {
     const { data: govs } = await supabase
@@ -97,6 +103,23 @@ export default function CheckoutScreen() {
   };
 
   const placeOrder = useCallback(async () => {
+    if (placingRef.current) {
+      console.warn('[placeOrder] IGNORED duplicate call — an order is already being placed (this is what causes the false "empty cart" on a double-fired click)');
+      return;
+    }
+    placingRef.current = true;
+    try {
+      await placeOrderInner();
+    } finally {
+      placingRef.current = false;
+    }
+  }, [
+    user, selectedBranch, selectedGovernorate, governorates, subtotal, items, cartLoading,
+    shippingCost, tax, total, upfrontAmount, remainingAmount, paymentMethod,
+    walletBalance, clearCart,
+  ]);
+
+  const placeOrderInner = useCallback(async () => {
     console.log('%c[placeOrder] START', 'color:#0af;font-weight:bold', {
       user_id: user?.id ?? null,
       user_email: user?.email ?? null,
