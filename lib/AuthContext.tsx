@@ -36,7 +36,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    console.log('[AuthContext] mount: calling getSession()', { time: new Date().toISOString() });
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      console.log('[AuthContext] getSession() resolved', {
+        hasSession: !!session,
+        user_id: session?.user?.id ?? null,
+        error,
+        time: new Date().toISOString(),
+      });
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
@@ -47,6 +54,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log(`%c[AuthContext] onAuthStateChange event: ${event}`, 'color:#0c0;font-weight:bold', {
+        hasSession: !!session,
+        user_id: session?.user?.id ?? null,
+        time: new Date().toISOString(),
+      });
       (async () => {
         setSession(session);
         setUser(session?.user ?? null);
