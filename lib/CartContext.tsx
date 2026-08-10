@@ -21,38 +21,58 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchCart = async () => {
+  const fetchCart = async (reason: string) => {
+    console.log(`%c[CartContext] fetchCart() called — reason: ${reason}`, 'color:#f80', {
+      user_id: user?.id ?? null,
+      time: new Date().toISOString(),
+    });
     if (!user) {
+      console.log('[CartContext] fetchCart: no user -> setItems([])');
       setItems([]);
       setLoading(false);
       return;
     }
     setLoading(true);
-    const { data } = await supabase
+    const { data, error, status } = await supabase
       .from('cart_items')
       .select(`
         *,
         product:products(*)
       `)
       .eq('user_id', user.id);
+    console.log('[CartContext] fetchCart: query result', {
+      user_id: user.id,
+      status,
+      error,
+      rowCount: data?.length,
+      data,
+      time: new Date().toISOString(),
+    });
     setItems((data as any) ?? []);
     setLoading(false);
   };
 
   useEffect(() => {
+    console.log('[CartContext] useEffect fired', {
+      user_id: user?.id ?? null,
+      authLoading,
+      time: new Date().toISOString(),
+    });
     // Wait until auth has resolved (session restored) before deciding the
     // cart is empty — otherwise we briefly report an empty cart while the
     // user's session is still loading (most noticeable on web).
     if (authLoading) {
+      console.log('[CartContext] useEffect: authLoading=true, setLoading(true) and waiting');
       setLoading(true);
       return;
     }
-    fetchCart();
+    fetchCart('useEffect[user?.id, authLoading]');
   }, [user?.id, authLoading]);
 
   const addToCart = async (product: Product, size: string, color: string, quantity = 1) => {
+    console.log('[CartContext] addToCart() called', { product_id: product.id, size, color, quantity, user_id: user?.id ?? null });
     if (!user) throw new Error('Please sign in to add items to cart');
-    const { data: existing } = await supabase
+    const { data: existing, error: existingError } = await supabase
       .from('cart_items')
       .select('*')
       .eq('user_id', user.id)
@@ -60,22 +80,26 @@ export function CartProvider({ children }: { children: ReactNode }) {
       .eq('size', size)
       .eq('color', color)
       .maybeSingle();
+    console.log('[CartContext] addToCart: existing row check', { existing, existingError });
 
     if (existing) {
-      await supabase
+      const { error: updateError } = await supabase
         .from('cart_items')
         .update({ quantity: existing.quantity + quantity })
         .eq('id', existing.id);
+      console.log('[CartContext] addToCart: update result', { updateError });
     } else {
-      await supabase.from('cart_items').insert({
+      const { error: insertError } = await supabase.from('cart_items').insert({
         user_id: user.id,
         product_id: product.id,
         size,
         color,
         quantity,
       });
+      console.log('[CartContext] addToCart: insert result', { insertError });
     }
-    await fetchCart();
+    await fetchCart('addToCart');
+    console.log('[CartContext] addToCart: done, fetchCart completed');
   };
 
   const updateQuantity = async (itemId: string, quantity: number) => {
