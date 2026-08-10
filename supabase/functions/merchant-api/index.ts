@@ -125,6 +125,7 @@ Deno.serve(async (req: Request) => {
         p_order_id: orderId,
         p_new_status: status,
         p_note: note || null,
+        p_caller_id: user.id,
       });
 
       if (rpcError) {
@@ -140,12 +141,32 @@ Deno.serve(async (req: Request) => {
 
       const { data: history, error } = await supabase
         .from("order_status_history")
-        .select("*, changer:profiles!changed_by(full_name)")
+        .select("*")
         .eq("order_id", orderId)
         .order("created_at", { ascending: false });
 
       if (error) return jsonResponse({ error: error.message }, 500);
-      return jsonResponse({ history: history || [] });
+
+      // Fetch changer names separately — changed_by references auth.users,
+      // not profiles, so PostgREST can't embed it directly via a FK hint.
+      const changerIds = [...new Set((history || []).map((h: any) => h.changed_by).filter(Boolean))];
+      let changerMap: Record<string, any> = {};
+      if (changerIds.length > 0) {
+        const { data: changerProfiles } = await supabase
+          .from("profiles")
+          .select("id, full_name")
+          .in("id", changerIds);
+        for (const p of changerProfiles || []) {
+          changerMap[p.id] = p;
+        }
+      }
+
+      const enriched = (history || []).map((h: any) => ({
+        ...h,
+        changer: h.changed_by ? changerMap[h.changed_by] ?? null : null,
+      }));
+
+      return jsonResponse({ history: enriched });
     }
 
     // ── GET /export/orders — CSV export of merchant orders ──
