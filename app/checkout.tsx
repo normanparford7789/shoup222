@@ -48,6 +48,11 @@ export default function CheckoutScreen() {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash_on_delivery');
   const [walletBalance, setWalletBalance] = useState(0);
   const [loading, setLoading] = useState(true);
+  // Set the moment an order successfully places, so the "cart is empty"
+  // screen (below) never flashes after clearCart() runs post-order — we
+  // navigate away immediately instead of relying on the user tapping a
+  // button inside Alert.alert, which is unreliable on web.
+  const [orderJustPlaced, setOrderJustPlaced] = useState(false);
   const [placing, setPlacing] = useState(false);
   // useRef gives us a synchronous, immediate lock — unlike `placing` state,
   // which only updates on the *next* render. On web, TouchableOpacity can
@@ -306,10 +311,18 @@ export default function CheckoutScreen() {
       console.log('[placeOrder] clearCart() done — SUCCESS, order:', orderNumber);
       // Clear stored affiliate ref after order is placed
       if (affiliateCode) { try { await AsyncStorage.removeItem('affiliate_ref'); } catch {} }
+
+      // Navigate to the invoice IMMEDIATELY — don't depend on the user
+      // tapping a button inside Alert.alert, which frequently fails to
+      // render (or render its buttons) on web. Set this BEFORE navigating
+      // so the empty-cart screen below never gets a chance to flash.
+      setOrderJustPlaced(true);
+      console.log('[placeOrder] navigating to invoice', order.id);
+      router.replace(`/invoice/${order.id}`);
+
       Alert.alert(
         t('Order Placed!'),
-        `تم إنشاء الطلب ${orderNumber}.\nالمدفوع مقدمًا 25%: $${upfrontAmount.toFixed(2)}\nالمستحق عند التسليم: $${remainingAmount.toFixed(2)}\nالفاتورة: ${invoiceNumber}`,
-        [{ text: t('View Invoice'), onPress: () => router.replace(`/invoice/${order.id}`) }]
+        `تم إنشاء الطلب ${orderNumber}.\nالمدفوع مقدمًا 25%: $${upfrontAmount.toFixed(2)}\nالمستحق عند التسليم: $${remainingAmount.toFixed(2)}\nالفاتورة: ${invoiceNumber}`
       );
     } catch (e: any) {
       console.error('%c[placeOrder] CAUGHT ERROR', 'color:#f00;font-weight:bold', {
@@ -329,7 +342,7 @@ export default function CheckoutScreen() {
     walletBalance, clearCart,
   ]);
 
-  if (loading || cartLoading) {
+  if (loading || cartLoading || orderJustPlaced) {
     return (
       <SafeAreaView style={styles.container}>
         <ActivityIndicator size="large" color={colors.primary[600]} style={{ flex: 1 }} />
@@ -337,7 +350,7 @@ export default function CheckoutScreen() {
     );
   }
 
-  if (items.length === 0) {
+  if (items.length === 0 && !orderJustPlaced) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
