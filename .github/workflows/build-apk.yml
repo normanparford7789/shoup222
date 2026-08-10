@@ -1,109 +1,42 @@
-name: Build Android APK
+name: Deploy Supabase (DB migrations + Edge Functions)
+
 on:
   push:
     branches: [main, master]
-  pull_request:
-    branches: [main, master]
+    paths:
+      - "supabase/**"
   workflow_dispatch:
+
 jobs:
-  build:
-    name: Build APK
+  deploy:
+    name: Deploy to Supabase
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 15
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
         with:
-          node-version: 22
-          cache: npm
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 17
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          packages: 'tools platform-tools build-tools;34.0.0 platforms;android-34 ndk;26.1.10909125'
-      - name: Update npm
-        run: npm install -g npm@latest
-      - name: Install dependencies
-        run: |
-          for attempt in 1 2 3; do
-            npm install --legacy-peer-deps && exit 0
-            echo "npm install failed (attempt $attempt), retrying..."
-            sleep 10
-          done
-          echo "npm install failed after 3 attempts"
-          exit 1
-      - name: Fix Expo SDK dependency versions
-        run: npx expo install --fix
-      - name: Create .env file
-        run: |
-          echo "EXPO_PUBLIC_SUPABASE_URL=${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}" > .env
-          echo "EXPO_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}" >> .env
-      - name: Prebuild Android
-        run: |
-          npx expo prebuild --platform android --clean --non-interactive
+          version: latest
+
+      - name: Link Supabase project
+        run: supabase link --project-ref "$SUPABASE_PROJECT_REF"
         env:
-          NODE_ENV: production
-      - name: Build APK with Gradle
-        run: |
-          cd android
-          chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon --stacktrace
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+      - name: Push database migrations
+        run: supabase db push
         env:
-          NODE_ENV: production
-          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=512m"
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: style-app-apk
-          path: |
-            android/app/build/outputs/apk/release/*.apk
-            android/app/build/outputs/apk/debug/*.apk
-          retention-days: 30
-  build-web:
-    name: Build Web & Verify
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - name: Install dependencies
-        run: |
-          for attempt in 1 2 3; do
-            npm install --legacy-peer-deps && exit 0
-            echo "npm install failed (attempt $attempt), retrying..."
-            sleep 10
-          done
-          echo "npm install failed after 3 attempts"
-          exit 1
-      - name: Fix Expo SDK dependency versions
-        run: npx expo install --fix
-      - name: Create .env file
-        run: |
-          echo "EXPO_PUBLIC_SUPABASE_URL=${{ secrets.EXPO_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co' }}" > .env
-          echo "EXPO_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key' }}" >> .env
-      - name: Build web app
-        run: npx expo export --platform web
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+      - name: Deploy all edge functions
+        run: supabase functions deploy --project-ref "$SUPABASE_PROJECT_REF"
         env:
-          NODE_ENV: production
-      - name: Verify build output
-        run: |
-          ls -la dist/
-          echo "Web build successful!"
-      - name: Upload web build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: style-web-build
-          path: dist/
-          retention-days: 7
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
