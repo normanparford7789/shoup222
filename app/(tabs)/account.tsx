@@ -176,7 +176,7 @@ export default function AccountScreen() {
             style={[styles.menuItem, styles.logoutItem]}
             onPress={() => {
               signOut();
-              router.replace('/(tabs)/index');
+              router.replace('/(tabs)');
             }}
             activeOpacity={0.7}
           >
