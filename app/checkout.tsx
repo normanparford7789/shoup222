@@ -105,7 +105,21 @@ export default function CheckoutScreen() {
       Alert.alert(t('Branch required'), t('Please select a shipping branch.'));
       return;
     }
-    if (items.length === 0) {
+    // Re-verify the cart directly from the database instead of trusting the
+    // in-memory context value — this avoids false "empty cart" errors caused
+    // by any client-side state timing issues (most noticeable on web).
+    const { data: freshItems, error: freshItemsError } = await supabase
+      .from('cart_items')
+      .select(`*, product:products(*)`)
+      .eq('user_id', user.id);
+
+    if (freshItemsError) {
+      Alert.alert(t('Error'), freshItemsError.message);
+      return;
+    }
+    const currentItems = (freshItems as any) ?? [];
+
+    if (currentItems.length === 0) {
       Alert.alert(t('Empty cart'), t('Add items to your cart first.'));
       return;
     }
@@ -167,7 +181,7 @@ export default function CheckoutScreen() {
 
       if (orderError) throw orderError;
 
-      const orderItems = items.map(item => ({
+      const orderItems = currentItems.map((item: any) => ({
         order_id: order.id,
         product_id: item.product_id,
         product_name: item.product?.name ?? 'Product',
@@ -236,7 +250,7 @@ export default function CheckoutScreen() {
       setPlacing(false);
     }
   }, [
-    user, selectedBranch, selectedGovernorate, governorates, items, subtotal,
+    user, selectedBranch, selectedGovernorate, governorates, subtotal,
     shippingCost, tax, total, upfrontAmount, remainingAmount, paymentMethod,
     walletBalance, clearCart,
   ]);
