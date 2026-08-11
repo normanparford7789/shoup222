@@ -22,6 +22,8 @@ import {
   Image as ImageIcon,
   Tag,
   Shield,
+  Palette,
+  Ruler,
 } from 'lucide-react-native';
 import { colors, spacing, radius, typography, shadows } from '@/lib/theme';
 import { ArabicText as Text, ArabicTextInput as TextInputArabic } from '@/components/ArabicText';
@@ -29,11 +31,20 @@ import { useAuth } from '@/lib/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/Button';
 import { pickAndUploadImage, isCloudinaryConfigured } from '@/lib/cloudinary';
-import type { Product, Category, ProductImage } from '@/lib/supabase';
+import type { Product, Category, ProductImage, ProductVariant } from '@/lib/supabase';
 
 type ProductWithRelations = Product & {
   category: Category | null;
   images: ProductImage[];
+  variants: ProductVariant[];
+};
+
+type VariantForm = {
+  id?: string;
+  color: string;
+  color_hex: string;
+  size: string;
+  stock: string;
 };
 
 type FormState = {
@@ -43,6 +54,7 @@ type FormState = {
   category_id: string;
   image_url: string;
   status: 'active' | 'draft';
+  variants: VariantForm[];
 };
 
 const emptyForm: FormState = {
@@ -52,7 +64,19 @@ const emptyForm: FormState = {
   category_id: '',
   image_url: '',
   status: 'active',
+  variants: [],
 };
+
+const QUICK_SIZES = ['S', 'M', 'L', 'XL', 'XXL', 'One Size'];
+
+const isValidHex = (hex: string) => /^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})$/.test(hex.trim());
+
+const emptyVariant = (): VariantForm => ({
+  color: '',
+  color_hex: '',
+  size: '',
+  stock: '0',
+});
 
 const generateSlug = (name: string) => {
   const base = name
@@ -87,7 +111,7 @@ export default function MerchantProductsScreen() {
       const [productsRes, categoriesRes] = await Promise.all([
         supabase
           .from('products')
-          .select('*, category:categories(*), images:product_images(*)')
+          .select('*, category:categories(*), images:product_images(*), variants:product_variants(*)')
           .eq('merchant_id', user.id)
           .order('created_at', { ascending: false }),
         supabase.from('categories').select('*').eq('is_active', true),
@@ -130,8 +154,31 @@ export default function MerchantProductsScreen() {
       category_id: product.category_id ?? '',
       image_url: product.images?.[0]?.image_url ?? '',
       status: (product.status as 'active' | 'draft') ?? 'active',
+      variants: (product.variants ?? []).map((v) => ({
+        id: v.id,
+        color: v.color ?? '',
+        color_hex: v.color_hex ?? '',
+        size: v.size ?? '',
+        stock: String(v.stock ?? 0),
+      })),
     });
     setModalVisible(true);
+  };
+
+  // ── Variant (colors & sizes) helpers ────────────────────────────
+  const addVariantRow = () => {
+    setForm((f) => ({ ...f, variants: [...f.variants, emptyVariant()] }));
+  };
+
+  const updateVariantRow = (index: number, patch: Partial<VariantForm>) => {
+    setForm((f) => ({
+      ...f,
+      variants: f.variants.map((v, i) => (i === index ? { ...v, ...patch } : v)),
+    }));
+  };
+
+  const removeVariantRow = (index: number) => {
+    setForm((f) => ({ ...f, variants: f.variants.filter((_, i) => i !== index) }));
   };
 
   const handleSave = async () => {
@@ -145,6 +192,47 @@ export default function MerchantProductsScreen() {
     if (isNaN(priceNum) || priceNum <= 0) {
       Alert.alert('Validation Error', 'Please enter a valid price.');
       return;
+    }
+
+    // Validate variants (colors & sizes)
+    const filledVariants = form.variants.filter(
+      (v) => v.color.trim() || v.color_hex.trim() || v.size.trim() || v.stock.trim()
+    );
+    for (const v of filledVariants) {
+      if (!v.color.trim() || !v.size.trim()) {
+        Alert.alert(
+          'Validation Error',
+          'Please enter both a color and a size for every option you add.'
+        );
+        return;
+      }
+      if (v.color_hex.trim() && !isValidHex(v.color_hex.trim())) {
+        Alert.alert(
+          'Validation Error',
+          `Please enter a valid hex color for "${v.color.trim()}" (e.g. #FF0000).`
+        );
+        return;
+      }
+      const stockNum = parseInt(v.stock, 10);
+      if (v.stock.trim() && (isNaN(stockNum) || stockNum < 0)) {
+        Alert.alert(
+          'Validation Error',
+          `Please enter a valid stock quantity for "${v.color.trim()} / ${v.size.trim()}".`
+        );
+        return;
+      }
+    }
+    const dupCheck = new Set<string>();
+    for (const v of filledVariants) {
+      const key = `${v.color.trim().toLowerCase()}|${v.size.trim().toLowerCase()}`;
+      if (dupCheck.has(key)) {
+        Alert.alert(
+          'Validation Error',
+          `You added "${v.color.trim()} / ${v.size.trim()}" more than once.`
+        );
+        return;
+      }
+      dupCheck.add(key);
     }
 
     setSaving(true);
@@ -184,6 +272,21 @@ export default function MerchantProductsScreen() {
           }
         }
 
+        // Sync colors & sizes (replace existing options with the current list)
+        await supabase.from('product_variants').delete().eq('product_id', editingId);
+        if (filledVariants.length > 0) {
+          const { error: variantsErr } = await supabase.from('product_variants').insert(
+            filledVariants.map((v) => ({
+              product_id: editingId,
+              color: v.color.trim(),
+              color_hex: v.color_hex.trim() || null,
+              size: v.size.trim(),
+              stock: v.stock.trim() ? parseInt(v.stock, 10) : 0,
+            }))
+          );
+          if (variantsErr) throw variantsErr;
+        }
+
         Alert.alert('Success', 'Product updated successfully.');
       } else {
         // ── Create new product ──
@@ -216,6 +319,20 @@ export default function MerchantProductsScreen() {
             sort_order: 0,
           });
           if (imgErr) throw imgErr;
+        }
+
+        // Insert colors & sizes if provided
+        if (filledVariants.length > 0 && created) {
+          const { error: variantsErr } = await supabase.from('product_variants').insert(
+            filledVariants.map((v) => ({
+              product_id: created.id,
+              color: v.color.trim(),
+              color_hex: v.color_hex.trim() || null,
+              size: v.size.trim(),
+              stock: v.stock.trim() ? parseInt(v.stock, 10) : 0,
+            }))
+          );
+          if (variantsErr) throw variantsErr;
         }
 
         Alert.alert('Success', 'Product created successfully.');
@@ -537,6 +654,121 @@ export default function MerchantProductsScreen() {
                   </TouchableOpacity>
                 ))}
               </ScrollView>
+
+              {/* Colors & Sizes */}
+              <View style={styles.variantsSectionHeader}>
+                <Text style={styles.fieldLabel}>Colors & Sizes</Text>
+                <Text style={styles.variantsHint}>
+                  Add the color and size options available for this product, with stock for each.
+                </Text>
+              </View>
+
+              {form.variants.map((variant, index) => (
+                <View key={index} style={styles.variantCard}>
+                  <View style={styles.variantCardHeader}>
+                    <View style={styles.variantBadge}>
+                      <Text style={styles.variantBadgeText}>Option {index + 1}</Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.variantDeleteBtn}
+                      onPress={() => removeVariantRow(index)}
+                      disabled={saving}
+                    >
+                      <Trash2 size={16} color={colors.error[500]} />
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Color */}
+                  <Text style={styles.variantFieldLabel}>
+                    <Palette size={13} color={colors.textSecondary} /> Color *
+                  </Text>
+                  <View style={styles.variantColorRow}>
+                    <TextInputArabic
+                      style={[styles.input, styles.variantColorInput]}
+                      placeholder="e.g. Red"
+                      value={variant.color}
+                      onChangeText={(v) => updateVariantRow(index, { color: v })}
+                      editable={!saving}
+                    />
+                    <TextInputArabic
+                      style={[styles.input, styles.variantHexInput]}
+                      placeholder="#FF0000"
+                      value={variant.color_hex}
+                      onChangeText={(v) => updateVariantRow(index, { color_hex: v })}
+                      autoCapitalize="none"
+                      editable={!saving}
+                    />
+                    <View
+                      style={[
+                        styles.variantSwatch,
+                        {
+                          backgroundColor: isValidHex(variant.color_hex)
+                            ? variant.color_hex.trim()
+                            : colors.neutral[100],
+                        },
+                      ]}
+                    />
+                  </View>
+
+                  {/* Size */}
+                  <Text style={styles.variantFieldLabel}>
+                    <Ruler size={13} color={colors.textSecondary} /> Size *
+                  </Text>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.categoryRow}
+                  >
+                    {QUICK_SIZES.map((s) => (
+                      <TouchableOpacity
+                        key={s}
+                        style={[
+                          styles.categoryChip,
+                          variant.size === s && styles.categoryChipActive,
+                        ]}
+                        onPress={() => updateVariantRow(index, { size: s })}
+                        disabled={saving}
+                      >
+                        <Text
+                          style={[
+                            styles.categoryChipText,
+                            variant.size === s && styles.categoryChipTextActive,
+                          ]}
+                        >
+                          {s}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                  <TextInputArabic
+                    style={styles.input}
+                    placeholder="Or type a custom size"
+                    value={variant.size}
+                    onChangeText={(v) => updateVariantRow(index, { size: v })}
+                    editable={!saving}
+                  />
+
+                  {/* Stock */}
+                  <Text style={styles.variantFieldLabel}>Stock Quantity</Text>
+                  <TextInputArabic
+                    style={styles.input}
+                    placeholder="0"
+                    value={variant.stock}
+                    onChangeText={(v) => updateVariantRow(index, { stock: v })}
+                    keyboardType="number-pad"
+                    editable={!saving}
+                  />
+                </View>
+              ))}
+
+              <TouchableOpacity
+                style={styles.addVariantBtn}
+                onPress={addVariantRow}
+                disabled={saving}
+              >
+                <Plus size={16} color={colors.primary[600]} />
+                <Text style={styles.addVariantBtnText}>Add Color / Size Option</Text>
+              </TouchableOpacity>
 
               {/* Image Upload */}
               <Text style={styles.fieldLabel}>Product Image</Text>
@@ -977,5 +1209,90 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.md,
     marginTop: spacing.md,
+  },
+  // Colors & Sizes (variants)
+  variantsSectionHeader: {
+    marginTop: spacing.sm,
+  },
+  variantsHint: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginBottom: spacing.sm,
+  },
+  variantCard: {
+    backgroundColor: colors.background,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  variantCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  },
+  variantBadge: {
+    backgroundColor: colors.primary[50],
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderRadius: radius.sm,
+  },
+  variantBadgeText: {
+    ...typography.caption,
+    color: colors.primary[700],
+    fontWeight: '600',
+  },
+  variantDeleteBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.error[50],
+  },
+  variantFieldLabel: {
+    ...typography.caption,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    marginBottom: spacing.xs,
+    marginTop: spacing.xs,
+  },
+  variantColorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  variantColorInput: {
+    flex: 1.4,
+  },
+  variantHexInput: {
+    flex: 1,
+  },
+  variantSwatch: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+  },
+  addVariantBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    borderColor: colors.primary[600],
+    borderStyle: 'dashed',
+    marginTop: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  addVariantBtnText: {
+    ...typography.bodySmall,
+    color: colors.primary[600],
+    fontWeight: '600',
   },
 });
