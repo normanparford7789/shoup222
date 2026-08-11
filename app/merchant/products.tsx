@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import {
   View,
   StyleSheet,
@@ -25,6 +25,10 @@ import {
   Palette,
   Ruler,
   Check,
+  Search,
+  SlidersHorizontal,
+  Download,
+  FileText,
 } from 'lucide-react-native';
 import { colors, spacing, radius, typography, shadows } from '@/lib/theme';
 import { ArabicText as Text, ArabicTextInput as TextInputArabic } from '@/components/ArabicText';
@@ -32,6 +36,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/Button';
 import { pickAndUploadImage, isCloudinaryConfigured } from '@/lib/cloudinary';
+import { downloadCSV, buildCSV, exportPDF, buildHTMLTable } from '@/lib/export';
 import type { Product, Category, ProductImage, ProductVariant } from '@/lib/supabase';
 
 type ProductWithRelations = Product & {
@@ -125,6 +130,16 @@ export default function MerchantProductsScreen() {
   const [customSize, setCustomSize] = useState('');
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+
+  // Search & filters
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filtersVisible, setFiltersVisible] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'draft'>('all');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [stockFilter, setStockFilter] = useState<'all' | 'in_stock' | 'out_of_stock'>('all');
+  const [priceMin, setPriceMin] = useState('');
+  const [priceMax, setPriceMax] = useState('');
+  const [exporting, setExporting] = useState(false);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -431,6 +446,129 @@ export default function MerchantProductsScreen() {
   const fmtMoney = (n: number) =>
     `$${Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
+  const totalStock = (p: ProductWithRelations) =>
+    (p.variants ?? []).reduce((sum, v) => sum + (v.stock ?? 0), 0);
+
+  const activeFilterCount = [
+    statusFilter !== 'all',
+    categoryFilter !== 'all',
+    stockFilter !== 'all',
+    priceMin.trim() !== '',
+    priceMax.trim() !== '',
+  ].filter(Boolean).length;
+
+  const clearFilters = () => {
+    setStatusFilter('all');
+    setCategoryFilter('all');
+    setStockFilter('all');
+    setPriceMin('');
+    setPriceMax('');
+  };
+
+  const filteredProducts = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    const min = priceMin.trim() ? Number(priceMin) : null;
+    const max = priceMax.trim() ? Number(priceMax) : null;
+
+    return products.filter((p) => {
+      if (q) {
+        const haystack = [p.name, p.sku, p.brand, p.category?.name]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+      if (statusFilter !== 'all' && p.status !== statusFilter) return false;
+      if (categoryFilter !== 'all' && p.category_id !== categoryFilter) return false;
+      if (stockFilter !== 'all') {
+        const stock = totalStock(p);
+        if (stockFilter === 'in_stock' && stock <= 0) return false;
+        if (stockFilter === 'out_of_stock' && stock > 0) return false;
+      }
+      if (min !== null && p.price < min) return false;
+      if (max !== null && p.price > max) return false;
+      return true;
+    });
+  }, [products, searchQuery, statusFilter, categoryFilter, stockFilter, priceMin, priceMax]);
+
+  const productStats = useMemo(() => {
+    const active = filteredProducts.filter((p) => p.status === 'active').length;
+    const draft = filteredProducts.filter((p) => p.status === 'draft').length;
+    const outOfStock = filteredProducts.filter((p) => totalStock(p) <= 0).length;
+    return { total: filteredProducts.length, active, draft, outOfStock };
+  }, [filteredProducts]);
+
+  const handleExportCSV = useCallback(async () => {
+    if (filteredProducts.length === 0) {
+      Alert.alert('No Data', 'No products to export.');
+      return;
+    }
+    setExporting(true);
+    try {
+      const headers = ['Name', 'SKU', 'Category', 'Price', 'Status', 'Stock', 'Colors', 'Sizes', 'Created'];
+      const rows = filteredProducts.map((p) => [
+        p.name,
+        p.sku ?? '',
+        p.category?.name ?? '',
+        p.price,
+        p.status,
+        totalStock(p),
+        Array.from(new Set((p.variants ?? []).map((v) => v.color))).join(' / '),
+        Array.from(new Set((p.variants ?? []).map((v) => v.size))).join(' / '),
+        new Date(p.created_at).toLocaleDateString(),
+      ]);
+      const csv = buildCSV(headers, rows);
+      await downloadCSV(csv, `merchant-products-${Date.now()}`);
+    } catch (e: any) {
+      Alert.alert('Export Error', e.message || 'Failed to export CSV');
+    } finally {
+      setExporting(false);
+    }
+  }, [filteredProducts]);
+
+  const handleExportPDF = useCallback(async () => {
+    if (filteredProducts.length === 0) {
+      Alert.alert('No Data', 'No products to export.');
+      return;
+    }
+    setExporting(true);
+    try {
+      const headers = ['Name', 'Category', 'Price', 'Status', 'Stock'];
+      const rows = filteredProducts.map((p) => [
+        p.name,
+        p.category?.name ?? 'N/A',
+        fmtMoney(p.price),
+        p.status === 'active' ? 'Active' : 'Draft',
+        String(totalStock(p)),
+      ]);
+      const html = buildHTMLTable(
+        'Merchant Products Report',
+        `${filteredProducts.length} products`,
+        headers,
+        rows
+      ) + `
+      <div style="margin-top:24px">
+        <div class="summary-card">
+          <div class="label">Active</div>
+          <div class="value">${productStats.active}</div>
+        </div>
+        <div class="summary-card">
+          <div class="label">Draft</div>
+          <div class="value">${productStats.draft}</div>
+        </div>
+        <div class="summary-card">
+          <div class="label">Out of Stock</div>
+          <div class="value">${productStats.outOfStock}</div>
+        </div>
+      </div>`;
+      await exportPDF(html, 'Merchant Products Report');
+    } catch (e: any) {
+      Alert.alert('Export Error', e.message || 'Failed to export PDF');
+    } finally {
+      setExporting(false);
+    }
+  }, [filteredProducts, productStats]);
+
   const renderProduct = ({ item }: { item: ProductWithRelations }) => {
     const thumb = item.images?.[0]?.image_url;
     return (
@@ -452,12 +590,29 @@ export default function MerchantProductsScreen() {
               {item.name}
             </Text>
             <Text style={styles.productPrice}>{fmtMoney(item.price)}</Text>
-            {item.category ? (
-              <View style={styles.categoryBadge}>
-                <Tag size={10} color={colors.primary[700]} />
-                <Text style={styles.categoryText}>{item.category.name}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, flexWrap: 'wrap' }}>
+              {item.category ? (
+                <View style={styles.categoryBadge}>
+                  <Tag size={10} color={colors.primary[700]} />
+                  <Text style={styles.categoryText}>{item.category.name}</Text>
+                </View>
+              ) : null}
+              <View
+                style={[
+                  styles.stockBadge,
+                  totalStock(item) <= 0 ? styles.stockBadgeEmpty : styles.stockBadgeOk,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.stockBadgeText,
+                    { color: totalStock(item) <= 0 ? colors.error[600] : colors.success[700] },
+                  ]}
+                >
+                  {totalStock(item) <= 0 ? 'Out of stock' : `${totalStock(item)} in stock`}
+                </Text>
               </View>
-            ) : null}
+            </View>
           </View>
           <View
             style={[
@@ -576,9 +731,25 @@ export default function MerchantProductsScreen() {
           <ChevronLeft size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.title}>My Products</Text>
-        <TouchableOpacity style={styles.iconBtn} onPress={openAdd}>
-          <Plus size={24} color={colors.primary[600]} />
-        </TouchableOpacity>
+        <View style={styles.headerRight}>
+          <TouchableOpacity
+            style={styles.iconBtn}
+            onPress={handleExportCSV}
+            disabled={exporting || filteredProducts.length === 0}
+          >
+            <Download size={20} color={colors.primary[600]} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.iconBtn}
+            onPress={handleExportPDF}
+            disabled={exporting || filteredProducts.length === 0}
+          >
+            <FileText size={20} color={colors.primary[600]} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.iconBtn} onPress={openAdd}>
+            <Plus size={24} color={colors.primary[600]} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {error ? (
@@ -587,25 +758,177 @@ export default function MerchantProductsScreen() {
         </View>
       ) : null}
 
+      {/* Search bar */}
+      <View style={styles.searchBarRow}>
+        <View style={styles.searchInputWrap}>
+          <Search size={18} color={colors.neutral[400]} />
+          <TextInputArabic
+            style={styles.searchInput}
+            placeholder="Search by name, SKU, or category…"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          {searchQuery ? (
+            <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <X size={16} color={colors.neutral[400]} />
+            </TouchableOpacity>
+          ) : null}
+        </View>
+        <TouchableOpacity
+          style={[styles.filterToggleBtn, activeFilterCount > 0 && styles.filterToggleBtnActive]}
+          onPress={() => setFiltersVisible((v) => !v)}
+        >
+          <SlidersHorizontal size={18} color={activeFilterCount > 0 ? colors.white : colors.primary[600]} />
+          {activeFilterCount > 0 ? (
+            <View style={styles.filterBadge}>
+              <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
+            </View>
+          ) : null}
+        </TouchableOpacity>
+      </View>
+
+      {/* Filter panel */}
+      {filtersVisible ? (
+        <View style={styles.filterPanel}>
+          <Text style={styles.filterGroupLabel}>Status</Text>
+          <View style={styles.filterChipRow}>
+            {(['all', 'active', 'draft'] as const).map((s) => (
+              <TouchableOpacity
+                key={s}
+                style={[styles.filterChip, statusFilter === s && styles.filterChipActive]}
+                onPress={() => setStatusFilter(s)}
+              >
+                <Text style={[styles.filterChipText, statusFilter === s && styles.filterChipTextActive]}>
+                  {s === 'all' ? 'All' : s === 'active' ? 'Active' : 'Draft'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <Text style={styles.filterGroupLabel}>Stock</Text>
+          <View style={styles.filterChipRow}>
+            {(['all', 'in_stock', 'out_of_stock'] as const).map((s) => (
+              <TouchableOpacity
+                key={s}
+                style={[styles.filterChip, stockFilter === s && styles.filterChipActive]}
+                onPress={() => setStockFilter(s)}
+              >
+                <Text style={[styles.filterChipText, stockFilter === s && styles.filterChipTextActive]}>
+                  {s === 'all' ? 'All' : s === 'in_stock' ? 'In Stock' : 'Out of Stock'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {categories.length > 0 ? (
+            <>
+              <Text style={styles.filterGroupLabel}>Category</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterChipRow}>
+                <TouchableOpacity
+                  style={[styles.filterChip, categoryFilter === 'all' && styles.filterChipActive]}
+                  onPress={() => setCategoryFilter('all')}
+                >
+                  <Text style={[styles.filterChipText, categoryFilter === 'all' && styles.filterChipTextActive]}>All</Text>
+                </TouchableOpacity>
+                {categories.map((cat) => (
+                  <TouchableOpacity
+                    key={cat.id}
+                    style={[styles.filterChip, categoryFilter === cat.id && styles.filterChipActive]}
+                    onPress={() => setCategoryFilter(cat.id)}
+                  >
+                    <Text style={[styles.filterChipText, categoryFilter === cat.id && styles.filterChipTextActive]}>
+                      {cat.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </>
+          ) : null}
+
+          <Text style={styles.filterGroupLabel}>Price Range</Text>
+          <View style={styles.priceRangeRow}>
+            <TextInputArabic
+              style={styles.priceInput}
+              placeholder="Min"
+              value={priceMin}
+              onChangeText={setPriceMin}
+              keyboardType="decimal-pad"
+            />
+            <Text style={styles.priceRangeDash}>—</Text>
+            <TextInputArabic
+              style={styles.priceInput}
+              placeholder="Max"
+              value={priceMax}
+              onChangeText={setPriceMax}
+              keyboardType="decimal-pad"
+            />
+          </View>
+
+          {activeFilterCount > 0 ? (
+            <TouchableOpacity style={styles.clearFiltersBtn} onPress={clearFilters}>
+              <Text style={styles.clearFiltersText}>Clear all filters</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      ) : null}
+
       <FlatList
-        data={products}
+        data={filteredProducts}
         keyExtractor={(item) => item.id}
         renderItem={renderProduct}
         contentContainerStyle={{ padding: spacing.md, paddingBottom: spacing.xxl }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Package size={56} color={colors.neutral[300]} />
-            <Text style={styles.emptyTitle}>No products yet</Text>
-            <Text style={styles.emptyMsg}>
-              Tap the + button to add your first product.
-            </Text>
-            <View style={{ marginTop: spacing.lg, width: '100%' }}>
-              <Button title="Add Product" onPress={openAdd} fullWidth />
+        ListHeaderComponent={
+          products.length > 0 ? (
+            <View style={styles.summaryRow}>
+              <View style={styles.summaryCard}>
+                <Text style={styles.summaryValue}>{productStats.total}</Text>
+                <Text style={styles.summaryLabel}>Showing</Text>
+              </View>
+              <View style={styles.summaryCard}>
+                <Text style={[styles.summaryValue, { color: colors.success[700] }]}>{productStats.active}</Text>
+                <Text style={styles.summaryLabel}>Active</Text>
+              </View>
+              <View style={styles.summaryCard}>
+                <Text style={[styles.summaryValue, { color: colors.neutral[500] }]}>{productStats.draft}</Text>
+                <Text style={styles.summaryLabel}>Draft</Text>
+              </View>
+              <View style={styles.summaryCard}>
+                <Text style={[styles.summaryValue, { color: colors.error[600] }]}>{productStats.outOfStock}</Text>
+                <Text style={styles.summaryLabel}>Out of Stock</Text>
+              </View>
             </View>
-          </View>
+          ) : null
+        }
+        ListEmptyComponent={
+          products.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Package size={56} color={colors.neutral[300]} />
+              <Text style={styles.emptyTitle}>No products yet</Text>
+              <Text style={styles.emptyMsg}>
+                Tap the + button to add your first product.
+              </Text>
+              <View style={{ marginTop: spacing.lg, width: '100%' }}>
+                <Button title="Add Product" onPress={openAdd} fullWidth />
+              </View>
+            </View>
+          ) : (
+            <View style={styles.emptyState}>
+              <Search size={56} color={colors.neutral[300]} />
+              <Text style={styles.emptyTitle}>No matching products</Text>
+              <Text style={styles.emptyMsg}>
+                Try adjusting your search or filters.
+              </Text>
+              <TouchableOpacity style={{ marginTop: spacing.lg }} onPress={() => { setSearchQuery(''); clearFilters(); }}>
+                <Text style={{ color: colors.primary[600], fontWeight: '600' }}>Clear search & filters</Text>
+              </TouchableOpacity>
+            </View>
+          )
         }
       />
+
 
       {/* ── Add/Edit Modal ─────────────────────────────────────────── */}
       <Modal
@@ -1039,6 +1362,176 @@ const styles = StyleSheet.create({
   errorBannerText: {
     ...typography.bodySmall,
     color: colors.error[700],
+  },
+  // Header
+  headerRight: { flexDirection: 'row', gap: 4 },
+  // Search & filters
+  searchBarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+    backgroundColor: colors.surface,
+  },
+  searchInputWrap: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.background,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    paddingHorizontal: spacing.md,
+    height: 44,
+  },
+  searchInput: {
+    flex: 1,
+    ...typography.body,
+    color: colors.text,
+  },
+  filterToggleBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterToggleBtnActive: {
+    backgroundColor: colors.primary[600],
+    borderColor: colors.primary[600],
+  },
+  filterBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: colors.error[600],
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  filterBadgeText: {
+    fontSize: 10,
+    color: colors.white,
+    fontWeight: '700',
+  },
+  filterPanel: {
+    backgroundColor: colors.surface,
+    marginHorizontal: spacing.md,
+    marginTop: spacing.sm,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.sm,
+  },
+  filterGroupLabel: {
+    ...typography.caption,
+    fontWeight: '700',
+    color: colors.textSecondary,
+    textTransform: 'uppercase',
+    marginBottom: spacing.xs,
+    marginTop: spacing.sm,
+  },
+  filterChipRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    flexWrap: 'wrap',
+  },
+  filterChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: radius.full,
+    backgroundColor: colors.neutral[100],
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  filterChipActive: {
+    backgroundColor: colors.primary[600],
+    borderColor: colors.primary[600],
+  },
+  filterChipText: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+  },
+  filterChipTextActive: {
+    color: colors.white,
+    fontWeight: '600',
+  },
+  priceRangeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  priceInput: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    ...typography.body,
+    color: colors.text,
+    backgroundColor: colors.background,
+  },
+  priceRangeDash: {
+    ...typography.body,
+    color: colors.neutral[400],
+  },
+  clearFiltersBtn: {
+    marginTop: spacing.md,
+    alignItems: 'center',
+  },
+  clearFiltersText: {
+    ...typography.bodySmall,
+    color: colors.error[600],
+    fontWeight: '600',
+  },
+  // Summary
+  summaryRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  summaryCard: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.sm,
+    alignItems: 'center',
+    ...shadows.sm,
+  },
+  summaryValue: {
+    ...typography.h4,
+    color: colors.text,
+    fontWeight: '700',
+  },
+  summaryLabel: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  // Stock badge
+  stockBadge: {
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderRadius: radius.sm,
+    alignSelf: 'flex-start',
+  },
+  stockBadgeOk: { backgroundColor: colors.success[50] },
+  stockBadgeEmpty: { backgroundColor: colors.error[50] },
+  stockBadgeText: {
+    ...typography.caption,
+    fontWeight: '600',
   },
   // Empty
   emptyState: {
