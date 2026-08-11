@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import {
   View,
   StyleSheet,
@@ -33,6 +33,8 @@ import {
   Mail,
   Clock,
   TrendingUp,
+  Search,
+  SlidersHorizontal,
 } from 'lucide-react-native';
 import { colors, spacing, radius, typography, shadows } from '@/lib/theme';
 import { ArabicText as Text, ArabicTextInput as TextInputArabic } from '@/components/ArabicText';
@@ -102,6 +104,15 @@ export default function MerchantOrdersScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+
+  // Search & filters
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filtersVisible, setFiltersVisible] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [paymentFilter, setPaymentFilter] = useState<string>('all');
+  const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month'>('all');
+  const [priceMin, setPriceMin] = useState('');
+  const [priceMax, setPriceMax] = useState('');
 
   // Detail modal
   const [detailItem, setDetailItem] = useState<OrderItemWithRelations | null>(null);
@@ -216,15 +227,71 @@ export default function MerchantOrdersScreen() {
     }
   }, [detailItem, selectedStatus, statusNote, getAuthHeaders, load, fetchHistory]);
 
+  const activeFilterCount = [
+    statusFilter !== 'all',
+    paymentFilter !== 'all',
+    dateFilter !== 'all',
+    priceMin.trim() !== '',
+    priceMax.trim() !== '',
+  ].filter(Boolean).length;
+
+  const clearFilters = () => {
+    setStatusFilter('all');
+    setPaymentFilter('all');
+    setDateFilter('all');
+    setPriceMin('');
+    setPriceMax('');
+  };
+
+  const filteredItems = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    const min = priceMin.trim() ? Number(priceMin) : null;
+    const max = priceMax.trim() ? Number(priceMax) : null;
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfWeek = new Date(startOfToday);
+    startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    return orderItems.filter((item) => {
+      const o = item.order;
+      if (q) {
+        const haystack = [
+          o?.order_number,
+          o?.customer?.full_name,
+          o?.customer?.phone,
+          o?.customer?.email,
+          item.product_name,
+          o?.tracking_number,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+      if (statusFilter !== 'all' && o?.status !== statusFilter) return false;
+      if (paymentFilter !== 'all' && o?.payment_status !== paymentFilter) return false;
+      if (dateFilter !== 'all') {
+        const created = new Date(item.created_at ?? o?.created_at ?? 0);
+        if (dateFilter === 'today' && created < startOfToday) return false;
+        if (dateFilter === 'week' && created < startOfWeek) return false;
+        if (dateFilter === 'month' && created < startOfMonth) return false;
+      }
+      if (min !== null && item.subtotal < min) return false;
+      if (max !== null && item.subtotal > max) return false;
+      return true;
+    });
+  }, [orderItems, searchQuery, statusFilter, paymentFilter, dateFilter, priceMin, priceMax]);
+
   const handleExportCSV = useCallback(async () => {
-    if (orderItems.length === 0) {
+    if (filteredItems.length === 0) {
       Alert.alert('No Data', 'No orders to export.');
       return;
     }
     setExporting(true);
     try {
       const headers = ['Order Number', 'Date', 'Status', 'Customer Name', 'Customer Phone', 'Customer Email', 'Product Name', 'Quantity', 'Unit Price', 'Subtotal', 'Merchant Earnings', 'Payment Status', 'Payment Method', 'Tracking Number'];
-      const rows = orderItems.map((item) => {
+      const rows = filteredItems.map((item) => {
         const o = item.order;
         const cust = o?.customer;
         return [
@@ -251,17 +318,17 @@ export default function MerchantOrdersScreen() {
     } finally {
       setExporting(false);
     }
-  }, [orderItems]);
+  }, [filteredItems]);
 
   const handleExportPDF = useCallback(async () => {
-    if (orderItems.length === 0) {
+    if (filteredItems.length === 0) {
       Alert.alert('No Data', 'No orders to export.');
       return;
     }
     setExporting(true);
     try {
       const headers = ['Order #', 'Date', 'Status', 'Customer', 'Product', 'Qty', 'Price', 'Earnings'];
-      const rows = orderItems.map((item) => {
+      const rows = filteredItems.map((item) => {
         const o = item.order;
         return [
           o?.order_number ?? 'N/A',
@@ -274,10 +341,10 @@ export default function MerchantOrdersScreen() {
           `$${Number(item.merchant_earnings || 0).toFixed(2)}`,
         ];
       });
-      const totalEarnings = orderItems.reduce((sum, i) => sum + (i.merchant_earnings ?? 0), 0);
+      const totalEarnings = filteredItems.reduce((sum, i) => sum + (i.merchant_earnings ?? 0), 0);
       const html = buildHTMLTable(
         'Merchant Orders Report',
-        `${orderItems.length} order items`,
+        `${filteredItems.length} order items`,
         headers,
         rows
       ) + `
@@ -293,7 +360,7 @@ export default function MerchantOrdersScreen() {
     } finally {
       setExporting(false);
     }
-  }, [orderItems]);
+  }, [filteredItems]);
 
   const fmtMoney = (n: number) =>
     `$${Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -453,8 +520,8 @@ export default function MerchantOrdersScreen() {
     );
   }
 
-  const totalEarnings = orderItems.reduce((sum, i) => sum + (i.merchant_earnings ?? 0), 0);
-  const pendingEarnings = orderItems
+  const totalEarnings = filteredItems.reduce((sum, i) => sum + (i.merchant_earnings ?? 0), 0);
+  const pendingEarnings = filteredItems
     .filter((i) => i.hold_until && new Date(i.hold_until) > new Date())
     .reduce((sum, i) => sum + (i.merchant_earnings ?? 0), 0);
 
@@ -469,14 +536,14 @@ export default function MerchantOrdersScreen() {
           <TouchableOpacity
             style={styles.iconBtn}
             onPress={handleExportCSV}
-            disabled={exporting || orderItems.length === 0}
+            disabled={exporting || filteredItems.length === 0}
           >
             <Download size={20} color={colors.primary[600]} />
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.iconBtn}
             onPress={handleExportPDF}
-            disabled={exporting || orderItems.length === 0}
+            disabled={exporting || filteredItems.length === 0}
           >
             <FileText size={20} color={colors.primary[600]} />
           </TouchableOpacity>
@@ -489,8 +556,120 @@ export default function MerchantOrdersScreen() {
         </View>
       ) : null}
 
+      {/* Search bar */}
+      <View style={styles.searchBarRow}>
+        <View style={styles.searchInputWrap}>
+          <Search size={18} color={colors.neutral[400]} />
+          <TextInputArabic
+            style={styles.searchInput}
+            placeholder="Search order #, customer, product…"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          {searchQuery ? (
+            <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <X size={16} color={colors.neutral[400]} />
+            </TouchableOpacity>
+          ) : null}
+        </View>
+        <TouchableOpacity
+          style={[styles.filterToggleBtn, activeFilterCount > 0 && styles.filterToggleBtnActive]}
+          onPress={() => setFiltersVisible((v) => !v)}
+        >
+          <SlidersHorizontal size={18} color={activeFilterCount > 0 ? colors.white : colors.primary[600]} />
+          {activeFilterCount > 0 ? (
+            <View style={styles.filterBadge}>
+              <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
+            </View>
+          ) : null}
+        </TouchableOpacity>
+      </View>
+
+      {/* Filter panel */}
+      {filtersVisible ? (
+        <View style={styles.filterPanel}>
+          <Text style={styles.filterGroupLabel}>Order Status</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterChipRow}>
+            <TouchableOpacity
+              style={[styles.filterChip, statusFilter === 'all' && styles.filterChipActive]}
+              onPress={() => setStatusFilter('all')}
+            >
+              <Text style={[styles.filterChipText, statusFilter === 'all' && styles.filterChipTextActive]}>All</Text>
+            </TouchableOpacity>
+            {STATUS_OPTIONS.map((opt) => (
+              <TouchableOpacity
+                key={opt.value}
+                style={[styles.filterChip, statusFilter === opt.value && styles.filterChipActive]}
+                onPress={() => setStatusFilter(opt.value)}
+              >
+                <Text style={[styles.filterChipText, statusFilter === opt.value && styles.filterChipTextActive]}>
+                  {opt.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          <Text style={styles.filterGroupLabel}>Payment Status</Text>
+          <View style={styles.filterChipRow}>
+            {['all', 'paid', 'pending', 'failed', 'refunded'].map((p) => (
+              <TouchableOpacity
+                key={p}
+                style={[styles.filterChip, paymentFilter === p && styles.filterChipActive]}
+                onPress={() => setPaymentFilter(p)}
+              >
+                <Text style={[styles.filterChipText, paymentFilter === p && styles.filterChipTextActive]}>
+                  {p === 'all' ? 'All' : p.charAt(0).toUpperCase() + p.slice(1)}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <Text style={styles.filterGroupLabel}>Date</Text>
+          <View style={styles.filterChipRow}>
+            {(['all', 'today', 'week', 'month'] as const).map((d) => (
+              <TouchableOpacity
+                key={d}
+                style={[styles.filterChip, dateFilter === d && styles.filterChipActive]}
+                onPress={() => setDateFilter(d)}
+              >
+                <Text style={[styles.filterChipText, dateFilter === d && styles.filterChipTextActive]}>
+                  {d === 'all' ? 'All Time' : d === 'today' ? 'Today' : d === 'week' ? 'This Week' : 'This Month'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <Text style={styles.filterGroupLabel}>Item Subtotal Range</Text>
+          <View style={styles.priceRangeRow}>
+            <TextInputArabic
+              style={styles.priceInput}
+              placeholder="Min"
+              value={priceMin}
+              onChangeText={setPriceMin}
+              keyboardType="decimal-pad"
+            />
+            <Text style={styles.priceRangeDash}>—</Text>
+            <TextInputArabic
+              style={styles.priceInput}
+              placeholder="Max"
+              value={priceMax}
+              onChangeText={setPriceMax}
+              keyboardType="decimal-pad"
+            />
+          </View>
+
+          {activeFilterCount > 0 ? (
+            <TouchableOpacity style={styles.clearFiltersBtn} onPress={clearFilters}>
+              <Text style={styles.clearFiltersText}>Clear all filters</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      ) : null}
+
       <FlatList
-        data={orderItems}
+        data={filteredItems}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         contentContainerStyle={{ padding: spacing.md, paddingBottom: spacing.xxl }}
@@ -498,6 +677,10 @@ export default function MerchantOrdersScreen() {
         ListHeaderComponent={
           orderItems.length > 0 ? (
             <View style={styles.summaryRow}>
+              <View style={styles.summaryCard}>
+                <Text style={styles.summaryValue}>{filteredItems.length}</Text>
+                <Text style={styles.summaryLabel}>Showing</Text>
+              </View>
               <View style={styles.summaryCard}>
                 <Text style={styles.summaryValue}>{fmtMoney(totalEarnings)}</Text>
                 <Text style={styles.summaryLabel}>Total Earnings</Text>
@@ -510,13 +693,26 @@ export default function MerchantOrdersScreen() {
           ) : null
         }
         ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <ShoppingBag size={56} color={colors.neutral[300]} />
-            <Text style={styles.emptyTitle}>No orders yet</Text>
-            <Text style={styles.emptyMsg}>
-              Orders containing your products will appear here.
-            </Text>
-          </View>
+          orderItems.length === 0 ? (
+            <View style={styles.emptyState}>
+              <ShoppingBag size={56} color={colors.neutral[300]} />
+              <Text style={styles.emptyTitle}>No orders yet</Text>
+              <Text style={styles.emptyMsg}>
+                Orders containing your products will appear here.
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.emptyState}>
+              <Search size={56} color={colors.neutral[300]} />
+              <Text style={styles.emptyTitle}>No matching orders</Text>
+              <Text style={styles.emptyMsg}>
+                Try adjusting your search or filters.
+              </Text>
+              <TouchableOpacity style={{ marginTop: spacing.lg }} onPress={() => { setSearchQuery(''); clearFilters(); }}>
+                <Text style={{ color: colors.primary[600], fontWeight: '600' }}>Clear search & filters</Text>
+              </TouchableOpacity>
+            </View>
+          )
         }
       />
 
@@ -834,6 +1030,97 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.error[100],
   },
   errorBannerText: { ...typography.bodySmall, color: colors.error[700] },
+  // Search & filters
+  searchBarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+    backgroundColor: colors.surface,
+  },
+  searchInputWrap: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.background,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    paddingHorizontal: spacing.md,
+    height: 44,
+  },
+  searchInput: { flex: 1, ...typography.body, color: colors.text },
+  filterToggleBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterToggleBtnActive: { backgroundColor: colors.primary[600], borderColor: colors.primary[600] },
+  filterBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: colors.error[600],
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  filterBadgeText: { fontSize: 10, color: colors.white, fontWeight: '700' },
+  filterPanel: {
+    backgroundColor: colors.surface,
+    marginHorizontal: spacing.md,
+    marginTop: spacing.sm,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.sm,
+  },
+  filterGroupLabel: {
+    ...typography.caption,
+    fontWeight: '700',
+    color: colors.textSecondary,
+    textTransform: 'uppercase',
+    marginBottom: spacing.xs,
+    marginTop: spacing.sm,
+  },
+  filterChipRow: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' },
+  filterChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: radius.full,
+    backgroundColor: colors.neutral[100],
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  filterChipActive: { backgroundColor: colors.primary[600], borderColor: colors.primary[600] },
+  filterChipText: { ...typography.bodySmall, color: colors.textSecondary },
+  filterChipTextActive: { color: colors.white, fontWeight: '600' },
+  priceRangeRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  priceInput: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    ...typography.body,
+    color: colors.text,
+    backgroundColor: colors.background,
+  },
+  priceRangeDash: { ...typography.body, color: colors.neutral[400] },
+  clearFiltersBtn: { marginTop: spacing.md, alignItems: 'center' },
+  clearFiltersText: { ...typography.bodySmall, color: colors.error[600], fontWeight: '600' },
   emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.xxl, gap: spacing.sm },
   emptyTitle: { ...typography.h4, color: colors.text },
   emptyMsg: { ...typography.bodySmall, color: colors.textSecondary, textAlign: 'center' },
