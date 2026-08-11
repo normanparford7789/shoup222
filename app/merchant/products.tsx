@@ -34,6 +34,7 @@ import { colors, spacing, radius, typography, shadows } from '@/lib/theme';
 import { ArabicText as Text, ArabicTextInput as TextInputArabic } from '@/components/ArabicText';
 import { useAuth } from '@/lib/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { confirmAction } from '@/lib/confirm';
 import { Button } from '@/components/Button';
 import { pickAndUploadImage, isCloudinaryConfigured } from '@/lib/cloudinary';
 import { downloadCSV, buildCSV, exportPDF, buildHTMLTable } from '@/lib/export';
@@ -417,29 +418,24 @@ export default function MerchantProductsScreen() {
   };
 
   const handleDelete = (product: ProductWithRelations) => {
-    Alert.alert(
-      'Delete Product',
-      `Are you sure you want to delete "${product.name}"? This action cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const { error: delErr } = await supabase
-                .from('products')
-                .delete()
-                .eq('id', product.id);
-              if (delErr) throw delErr;
-              Alert.alert('Success', 'Product deleted.');
-              await load();
-            } catch (e: any) {
-              Alert.alert('Error', e.message || 'Failed to delete product');
-            }
-          },
-        },
-      ]
+    confirmAction(
+      {
+        title: 'Delete Product',
+        message: `Are you sure you want to delete "${product.name}"? This action cannot be undone.`,
+      },
+      async () => {
+        try {
+          const { error: delErr } = await supabase
+            .from('products')
+            .delete()
+            .eq('id', product.id);
+          if (delErr) throw delErr;
+          Alert.alert('Success', 'Product deleted.');
+          await load();
+        } catch (e: any) {
+          Alert.alert('Error', e.message || 'Failed to delete product');
+        }
+      }
     );
   };
 
