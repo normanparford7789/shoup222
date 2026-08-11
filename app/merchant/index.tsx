@@ -215,7 +215,7 @@ export default function MerchantDashboardScreen() {
     },
     {
       label: 'View Orders',
-      description: 'Track orders containing your products',
+      description: 'Search, filter, and export orders containing your products',
       icon: <ShoppingBag size={24} color={colors.primary[600]} />,
       onPress: () => router.push('/merchant/orders'),
     },
@@ -224,6 +224,12 @@ export default function MerchantDashboardScreen() {
       description: 'View your sales earnings and transaction history',
       icon: <BarChart3 size={24} color={colors.primary[600]} />,
       onPress: () => router.push('/merchant/wallet'),
+    },
+    {
+      label: 'Withdrawals',
+      description: 'Request and track payouts from your wallet balance',
+      icon: <DollarSign size={24} color={colors.primary[600]} />,
+      onPress: () => router.push('/merchant/withdrawals'),
     },
   ];
 
