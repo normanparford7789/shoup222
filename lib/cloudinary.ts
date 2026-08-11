@@ -87,10 +87,15 @@ export async function pickVideo(): Promise<string | null> {
 /**
  * Uploads a file (image or video) to Cloudinary using an unsigned upload preset.
  * Returns the secure URL of the uploaded file.
+ *
+ * @param onProgress optional callback fired with a 0–100 percentage as the
+ *  upload progresses. Only works via XHR, so progress is only reported when
+ *  the upload is actually running (native and web both supported).
  */
 export async function uploadToCloudinary(
   fileUri: string,
-  resourceType: 'image' | 'video' = 'image'
+  resourceType: 'image' | 'video' = 'image',
+  onProgress?: (percent: number) => void
 ): Promise<UploadResult> {
   if (!CLOUD_NAME || !UPLOAD_PRESET) {
     throw new Error(
@@ -120,20 +125,41 @@ export async function uploadToCloudinary(
   formData.append('upload_preset', UPLOAD_PRESET);
   formData.append('resource_type', resourceType);
 
-  const response = await fetch(CLOUDINARY_UPLOAD_URL, {
-    method: 'POST',
-    body: formData,
-    headers: {
-      Accept: 'application/json',
-    },
+  // Use XHR instead of fetch so we can report upload progress.
+  const data = await new Promise<any>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', CLOUDINARY_UPLOAD_URL);
+    xhr.setRequestHeader('Accept', 'application/json');
+
+    if (xhr.upload && onProgress) {
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+          const percent = Math.round((event.loaded / event.total) * 100);
+          onProgress(percent);
+        }
+      };
+    }
+
+    xhr.onload = () => {
+      let parsed: any = null;
+      try {
+        parsed = JSON.parse(xhr.responseText);
+      } catch {
+        // fallthrough to error handling below
+      }
+      if (xhr.status >= 200 && xhr.status < 300 && parsed) {
+        resolve(parsed);
+      } else {
+        const message = parsed?.error?.message || xhr.responseText || `HTTP ${xhr.status}`;
+        reject(new Error(`Cloudinary upload failed (${xhr.status}): ${message}`));
+      }
+    };
+
+    xhr.onerror = () => reject(new Error('Cloudinary upload failed: network error'));
+    xhr.onabort = () => reject(new Error('Cloudinary upload cancelled'));
+
+    xhr.send(formData);
   });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Cloudinary upload failed (${response.status}): ${errorText}`);
-  }
-
-  const data = await response.json();
 
   if (!data.secure_url) {
     throw new Error('Cloudinary upload failed: no URL returned');
@@ -161,11 +187,14 @@ export async function pickAndUploadImage(): Promise<string | null> {
 /**
  * Convenience: picks a video and uploads it to Cloudinary.
  * Returns the secure URL or null if the user cancelled.
+ * Pass onProgress to receive 0–100 percentage updates during the upload.
  */
-export async function pickAndUploadVideo(): Promise<string | null> {
+export async function pickAndUploadVideo(
+  onProgress?: (percent: number) => void
+): Promise<string | null> {
   const uri = await pickVideo();
   if (!uri) return null;
-  const result = await uploadToCloudinary(uri, 'video');
+  const result = await uploadToCloudinary(uri, 'video', onProgress);
   return result.secure_url;
 }
 
