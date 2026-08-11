@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 
 /**
@@ -98,12 +99,24 @@ export async function uploadToCloudinary(
   }
 
   const formData = new FormData();
-  // @ts-ignore - React Native FormData accepts URI strings
-  formData.append('file', {
-    uri: fileUri,
-    type: resourceType === 'video' ? 'video/mp4' : 'image/jpeg',
-    name: resourceType === 'video' ? 'upload.mp4' : 'upload.jpg',
-  });
+
+  if (Platform.OS === 'web') {
+    // On web, FormData needs a real Blob/File — passing {uri, type, name}
+    // gets coerced to the string "[object Object]" and Cloudinary rejects it
+    // with "Unsupported source URL: [object Object]".
+    const fileResponse = await fetch(fileUri);
+    const blob = await fileResponse.blob();
+    const fileName = resourceType === 'video' ? 'upload.mp4' : 'upload.jpg';
+    formData.append('file', blob, fileName);
+  } else {
+    // @ts-ignore - React Native FormData accepts URI strings on native
+    formData.append('file', {
+      uri: fileUri,
+      type: resourceType === 'video' ? 'video/mp4' : 'image/jpeg',
+      name: resourceType === 'video' ? 'upload.mp4' : 'upload.jpg',
+    });
+  }
+
   formData.append('upload_preset', UPLOAD_PRESET);
   formData.append('resource_type', resourceType);
 
