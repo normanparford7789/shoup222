@@ -27,6 +27,7 @@ import { colors, spacing, radius, typography, shadows } from '@/lib/theme';
 import { ArabicText as Text, ArabicTextInput as TextInputArabic } from '@/components/ArabicText';
 import { useAuth } from '@/lib/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { confirmAction } from '@/lib/confirm';
 import { Button } from '@/components/Button';
 import { pickAndUploadVideo, isCloudinaryConfigured } from '@/lib/cloudinary';
 import type { Reel, Product } from '@/lib/supabase';
@@ -151,29 +152,24 @@ export default function MerchantReelsScreen() {
   };
 
   const handleDelete = (reel: ReelWithProduct) => {
-    Alert.alert(
-      'Delete Reel',
-      `Are you sure you want to delete "${reel.title || 'this reel'}"?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const { error: delErr } = await supabase
-                .from('reels')
-                .delete()
-                .eq('id', reel.id);
-              if (delErr) throw delErr;
-              Alert.alert('Success', 'Reel deleted.');
-              await load();
-            } catch (e: any) {
-              Alert.alert('Error', e.message || 'Failed to delete reel');
-            }
-          },
-        },
-      ]
+    confirmAction(
+      {
+        title: 'Delete Reel',
+        message: `Are you sure you want to delete "${reel.title || 'this reel'}"?`,
+      },
+      async () => {
+        try {
+          const { error: delErr } = await supabase
+            .from('reels')
+            .delete()
+            .eq('id', reel.id);
+          if (delErr) throw delErr;
+          Alert.alert('Success', 'Reel deleted.');
+          await load();
+        } catch (e: any) {
+          Alert.alert('Error', e.message || 'Failed to delete reel');
+        }
+      }
     );
   };
 
