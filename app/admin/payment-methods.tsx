@@ -27,6 +27,7 @@ import { colors, spacing, radius, typography, shadows } from '@/lib/theme';
 import { ArabicText as Text, ArabicTextInput as TextInputArabic } from '@/components/ArabicText';
 import { useAuth } from '@/lib/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { confirmAction } from '@/lib/confirm';
 import { Button } from '@/components/Button';
 
 type PaymentMethodRecord = {
@@ -160,28 +161,23 @@ export default function AdminPaymentMethodsScreen() {
   };
 
   const handleDelete = (m: PaymentMethodRecord) => {
-    Alert.alert(
-      'Delete Payment Method',
-      `Are you sure you want to delete "${m.name}"? This cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const { error: deleteErr } = await supabase
-                .from('payment_methods')
-                .delete()
-                .eq('id', m.id);
-              if (deleteErr) throw deleteErr;
-              setMethods((prev) => prev.filter((x) => x.id !== m.id));
-            } catch (e: any) {
-              Alert.alert('Error', e.message);
-            }
-          },
-        },
-      ]
+    confirmAction(
+      {
+        title: 'Delete Payment Method',
+        message: `Are you sure you want to delete "${m.name}"? This cannot be undone.`,
+      },
+      async () => {
+        try {
+          const { error: deleteErr } = await supabase
+            .from('payment_methods')
+            .delete()
+            .eq('id', m.id);
+          if (deleteErr) throw deleteErr;
+          setMethods((prev) => prev.filter((x) => x.id !== m.id));
+        } catch (e: any) {
+          Alert.alert('Error', e.message);
+        }
+      }
     );
   };
 
