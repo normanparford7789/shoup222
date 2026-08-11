@@ -186,7 +186,10 @@ export default function RelzScreen() {
       />
 
       <Modal visible={!!commentReel} animationType="slide" transparent onRequestClose={() => setCommentReel(null)}>
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
           <View style={styles.commentSheet}>
             <View style={styles.commentHeader}>
               <Text style={styles.commentTitle}>Comments</Text>
@@ -211,31 +214,29 @@ export default function RelzScreen() {
                 ))
               )}
             </ScrollView>
-            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-              <View style={styles.commentInputRow}>
-                <TextInput
-                  style={styles.commentInput}
-                  placeholder="Write a comment..."
-                  placeholderTextColor={colors.textMuted}
-                  value={commentText}
-                  onChangeText={setCommentText}
-                  multiline
-                />
-                <TouchableOpacity
-                  style={[styles.sendBtn, !commentText.trim() && styles.sendBtnDisabled]}
-                  onPress={sendComment}
-                  disabled={!commentText.trim() || sendingComment}
-                >
-                  {sendingComment ? (
-                    <ActivityIndicator size="small" color={colors.white} />
-                  ) : (
-                    <Send size={18} color={colors.white} />
-                  )}
-                </TouchableOpacity>
-              </View>
-            </KeyboardAvoidingView>
+            <View style={styles.commentInputRow}>
+              <TextInput
+                style={styles.commentInput}
+                placeholder="Write a comment..."
+                placeholderTextColor={colors.textMuted}
+                value={commentText}
+                onChangeText={setCommentText}
+                multiline
+              />
+              <TouchableOpacity
+                style={[styles.sendBtn, !commentText.trim() && styles.sendBtnDisabled]}
+                onPress={sendComment}
+                disabled={!commentText.trim() || sendingComment}
+              >
+                {sendingComment ? (
+                  <ActivityIndicator size="small" color={colors.white} />
+                ) : (
+                  <Send size={18} color={colors.white} />
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -431,7 +432,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    maxHeight: height * 0.75,
+    height: height * 0.92,
     paddingBottom: Platform.OS === 'ios' ? 34 : spacing.md,
   },
   commentHeader: {
