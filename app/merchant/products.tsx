@@ -24,6 +24,7 @@ import {
   Shield,
   Palette,
   Ruler,
+  Check,
 } from 'lucide-react-native';
 import { colors, spacing, radius, typography, shadows } from '@/lib/theme';
 import { ArabicText as Text, ArabicTextInput as TextInputArabic } from '@/components/ArabicText';
@@ -39,13 +40,7 @@ type ProductWithRelations = Product & {
   variants: ProductVariant[];
 };
 
-type VariantForm = {
-  id?: string;
-  color: string;
-  color_hex: string;
-  size: string;
-  stock: string;
-};
+type ColorOption = { name: string; hex: string };
 
 type FormState = {
   name: string;
@@ -54,7 +49,9 @@ type FormState = {
   category_id: string;
   image_url: string;
   status: 'active' | 'draft';
-  variants: VariantForm[];
+  colors: ColorOption[];
+  sizes: string[];
+  stock: Record<string, string>; // key: `${colorName}__${size}`
 };
 
 const emptyForm: FormState = {
@@ -64,19 +61,43 @@ const emptyForm: FormState = {
   category_id: '',
   image_url: '',
   status: 'active',
-  variants: [],
+  colors: [],
+  sizes: [],
+  stock: {},
 };
 
-const QUICK_SIZES = ['S', 'M', 'L', 'XL', 'XXL', 'One Size'];
+// Predefined color palette — merchant picks from real swatches, no typing needed
+const COLOR_PALETTE: ColorOption[] = [
+  { name: 'Black', hex: '#000000' },
+  { name: 'White', hex: '#FFFFFF' },
+  { name: 'Gray', hex: '#9CA3AF' },
+  { name: 'Red', hex: '#EF4444' },
+  { name: 'Orange', hex: '#F97316' },
+  { name: 'Yellow', hex: '#EAB308' },
+  { name: 'Green', hex: '#22C55E' },
+  { name: 'Teal', hex: '#14B8A6' },
+  { name: 'Blue', hex: '#3B82F6' },
+  { name: 'Navy', hex: '#1E3A8A' },
+  { name: 'Purple', hex: '#A855F7' },
+  { name: 'Pink', hex: '#EC4899' },
+  { name: 'Brown', hex: '#92400E' },
+  { name: 'Beige', hex: '#E7D5B8' },
+  { name: 'Gold', hex: '#D4AF37' },
+  { name: 'Silver', hex: '#C0C0C0' },
+];
 
-const isValidHex = (hex: string) => /^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})$/.test(hex.trim());
+// Quick-pick sizes — shared across all selected colors for this product
+const QUICK_SIZES = ['S', 'M', 'L', 'XL', 'XXL', 'XXXL', 'One Size'];
 
-const emptyVariant = (): VariantForm => ({
-  color: '',
-  color_hex: '',
-  size: '',
-  stock: '0',
-});
+const stockKey = (colorName: string, size: string) => `${colorName}__${size}`;
+
+const isLightColor = (hex: string) => {
+  const c = hex.replace('#', '');
+  const r = parseInt(c.substring(0, 2), 16);
+  const g = parseInt(c.substring(2, 4), 16);
+  const b = parseInt(c.substring(4, 6), 16);
+  return (r * 299 + g * 587 + b * 114) / 1000 > 200;
+};
 
 const generateSlug = (name: string) => {
   const base = name
@@ -101,6 +122,7 @@ export default function MerchantProductsScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
+  const [customSize, setCustomSize] = useState('');
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
 
@@ -142,11 +164,30 @@ export default function MerchantProductsScreen() {
   const openAdd = () => {
     setEditingId(null);
     setForm(emptyForm);
+    setCustomSize('');
     setModalVisible(true);
   };
 
   const openEdit = (product: ProductWithRelations) => {
     setEditingId(product.id);
+
+    const colorMap = new Map<string, ColorOption>();
+    const sizesSet = new Set<string>();
+    const stock: Record<string, string> = {};
+    (product.variants ?? []).forEach((v) => {
+      if (!colorMap.has(v.color)) {
+        const paletteMatch = COLOR_PALETTE.find(
+          (c) => c.name.toLowerCase() === v.color.toLowerCase()
+        );
+        colorMap.set(v.color, {
+          name: v.color,
+          hex: v.color_hex || paletteMatch?.hex || colors.neutral[400],
+        });
+      }
+      sizesSet.add(v.size);
+      stock[stockKey(v.color, v.size)] = String(v.stock ?? 0);
+    });
+
     setForm({
       name: product.name,
       price: String(product.price ?? ''),
@@ -154,31 +195,61 @@ export default function MerchantProductsScreen() {
       category_id: product.category_id ?? '',
       image_url: product.images?.[0]?.image_url ?? '',
       status: (product.status as 'active' | 'draft') ?? 'active',
-      variants: (product.variants ?? []).map((v) => ({
-        id: v.id,
-        color: v.color ?? '',
-        color_hex: v.color_hex ?? '',
-        size: v.size ?? '',
-        stock: String(v.stock ?? 0),
-      })),
+      colors: Array.from(colorMap.values()),
+      sizes: Array.from(sizesSet),
+      stock,
     });
     setModalVisible(true);
   };
 
-  // ── Variant (colors & sizes) helpers ────────────────────────────
-  const addVariantRow = () => {
-    setForm((f) => ({ ...f, variants: [...f.variants, emptyVariant()] }));
+  // ── Colors & Sizes helpers ──────────────────────────────────────
+  const toggleColor = (option: ColorOption) => {
+    setForm((f) => {
+      const isSelected = f.colors.some((c) => c.name === option.name);
+      if (isSelected) {
+        const stock = { ...f.stock };
+        f.sizes.forEach((s) => delete stock[stockKey(option.name, s)]);
+        return { ...f, colors: f.colors.filter((c) => c.name !== option.name), stock };
+      }
+      const stock = { ...f.stock };
+      f.sizes.forEach((s) => {
+        const key = stockKey(option.name, s);
+        if (!(key in stock)) stock[key] = '0';
+      });
+      return { ...f, colors: [...f.colors, option], stock };
+    });
   };
 
-  const updateVariantRow = (index: number, patch: Partial<VariantForm>) => {
-    setForm((f) => ({
-      ...f,
-      variants: f.variants.map((v, i) => (i === index ? { ...v, ...patch } : v)),
-    }));
+  const toggleSize = (size: string) => {
+    setForm((f) => {
+      const isSelected = f.sizes.includes(size);
+      if (isSelected) {
+        const stock = { ...f.stock };
+        f.colors.forEach((c) => delete stock[stockKey(c.name, size)]);
+        return { ...f, sizes: f.sizes.filter((s) => s !== size), stock };
+      }
+      const stock = { ...f.stock };
+      f.colors.forEach((c) => {
+        const key = stockKey(c.name, size);
+        if (!(key in stock)) stock[key] = '0';
+      });
+      return { ...f, sizes: [...f.sizes, size], stock };
+    });
   };
 
-  const removeVariantRow = (index: number) => {
-    setForm((f) => ({ ...f, variants: f.variants.filter((_, i) => i !== index) }));
+  const addCustomSize = () => {
+    const size = customSize.trim();
+    if (!size) return;
+    if (form.sizes.some((s) => s.toLowerCase() === size.toLowerCase())) {
+      setCustomSize('');
+      return;
+    }
+    toggleSize(size);
+    setCustomSize('');
+  };
+
+  const updateStock = (colorName: string, size: string, value: string) => {
+    setForm((f) => ({ ...f, stock: { ...f.stock, [stockKey(colorName, size)]: value } }));
   };
 
   const handleSave = async () => {
@@ -194,45 +265,28 @@ export default function MerchantProductsScreen() {
       return;
     }
 
-    // Validate variants (colors & sizes)
-    const filledVariants = form.variants.filter(
-      (v) => v.color.trim() || v.color_hex.trim() || v.size.trim() || v.stock.trim()
-    );
-    for (const v of filledVariants) {
-      if (!v.color.trim() || !v.size.trim()) {
-        Alert.alert(
-          'Validation Error',
-          'Please enter both a color and a size for every option you add.'
-        );
-        return;
-      }
-      if (v.color_hex.trim() && !isValidHex(v.color_hex.trim())) {
-        Alert.alert(
-          'Validation Error',
-          `Please enter a valid hex color for "${v.color.trim()}" (e.g. #FF0000).`
-        );
-        return;
-      }
-      const stockNum = parseInt(v.stock, 10);
-      if (v.stock.trim() && (isNaN(stockNum) || stockNum < 0)) {
-        Alert.alert(
-          'Validation Error',
-          `Please enter a valid stock quantity for "${v.color.trim()} / ${v.size.trim()}".`
-        );
-        return;
+    // Build the color × size stock combinations
+    const variantsToSave: { color: string; color_hex: string | null; size: string; stock: number }[] = [];
+    for (const c of form.colors) {
+      for (const s of form.sizes) {
+        const raw = form.stock[stockKey(c.name, s)] ?? '0';
+        const stockNum = raw.trim() === '' ? 0 : parseInt(raw, 10);
+        if (isNaN(stockNum) || stockNum < 0) {
+          Alert.alert(
+            'Validation Error',
+            `Please enter a valid stock quantity for "${c.name} / ${s}".`
+          );
+          return;
+        }
+        variantsToSave.push({ color: c.name, color_hex: c.hex, size: s, stock: stockNum });
       }
     }
-    const dupCheck = new Set<string>();
-    for (const v of filledVariants) {
-      const key = `${v.color.trim().toLowerCase()}|${v.size.trim().toLowerCase()}`;
-      if (dupCheck.has(key)) {
-        Alert.alert(
-          'Validation Error',
-          `You added "${v.color.trim()} / ${v.size.trim()}" more than once.`
-        );
-        return;
-      }
-      dupCheck.add(key);
+    if ((form.colors.length > 0) !== (form.sizes.length > 0)) {
+      Alert.alert(
+        'Validation Error',
+        'Please select at least one color and at least one size, or leave both empty.'
+      );
+      return;
     }
 
     setSaving(true);
@@ -272,16 +326,16 @@ export default function MerchantProductsScreen() {
           }
         }
 
-        // Sync colors & sizes (replace existing options with the current list)
+        // Sync colors & sizes (replace existing options with the current selection)
         await supabase.from('product_variants').delete().eq('product_id', editingId);
-        if (filledVariants.length > 0) {
+        if (variantsToSave.length > 0) {
           const { error: variantsErr } = await supabase.from('product_variants').insert(
-            filledVariants.map((v) => ({
+            variantsToSave.map((v) => ({
               product_id: editingId,
-              color: v.color.trim(),
-              color_hex: v.color_hex.trim() || null,
-              size: v.size.trim(),
-              stock: v.stock.trim() ? parseInt(v.stock, 10) : 0,
+              color: v.color,
+              color_hex: v.color_hex,
+              size: v.size,
+              stock: v.stock,
             }))
           );
           if (variantsErr) throw variantsErr;
@@ -322,14 +376,14 @@ export default function MerchantProductsScreen() {
         }
 
         // Insert colors & sizes if provided
-        if (filledVariants.length > 0 && created) {
+        if (variantsToSave.length > 0 && created) {
           const { error: variantsErr } = await supabase.from('product_variants').insert(
-            filledVariants.map((v) => ({
+            variantsToSave.map((v) => ({
               product_id: created.id,
-              color: v.color.trim(),
-              color_hex: v.color_hex.trim() || null,
-              size: v.size.trim(),
-              stock: v.stock.trim() ? parseInt(v.stock, 10) : 0,
+              color: v.color,
+              color_hex: v.color_hex,
+              size: v.size,
+              stock: v.stock,
             }))
           );
           if (variantsErr) throw variantsErr;
@@ -655,120 +709,148 @@ export default function MerchantProductsScreen() {
                 ))}
               </ScrollView>
 
-              {/* Colors & Sizes */}
+              {/* Available Colors */}
               <View style={styles.variantsSectionHeader}>
-                <Text style={styles.fieldLabel}>Colors & Sizes</Text>
+                <Text style={styles.fieldLabel}>
+                  <Palette size={14} color={colors.text} /> Available Colors
+                </Text>
                 <Text style={styles.variantsHint}>
-                  Add the color and size options available for this product, with stock for each.
+                  Tap the colors this product comes in.
                 </Text>
               </View>
-
-              {form.variants.map((variant, index) => (
-                <View key={index} style={styles.variantCard}>
-                  <View style={styles.variantCardHeader}>
-                    <View style={styles.variantBadge}>
-                      <Text style={styles.variantBadgeText}>Option {index + 1}</Text>
-                    </View>
+              <View style={styles.colorGrid}>
+                {COLOR_PALETTE.map((opt) => {
+                  const selected = form.colors.some((c) => c.name === opt.name);
+                  return (
                     <TouchableOpacity
-                      style={styles.variantDeleteBtn}
-                      onPress={() => removeVariantRow(index)}
+                      key={opt.name}
+                      style={styles.colorChip}
+                      onPress={() => toggleColor(opt)}
                       disabled={saving}
                     >
-                      <Trash2 size={16} color={colors.error[500]} />
-                    </TouchableOpacity>
-                  </View>
-
-                  {/* Color */}
-                  <Text style={styles.variantFieldLabel}>
-                    <Palette size={13} color={colors.textSecondary} /> Color *
-                  </Text>
-                  <View style={styles.variantColorRow}>
-                    <TextInputArabic
-                      style={[styles.input, styles.variantColorInput]}
-                      placeholder="e.g. Red"
-                      value={variant.color}
-                      onChangeText={(v) => updateVariantRow(index, { color: v })}
-                      editable={!saving}
-                    />
-                    <TextInputArabic
-                      style={[styles.input, styles.variantHexInput]}
-                      placeholder="#FF0000"
-                      value={variant.color_hex}
-                      onChangeText={(v) => updateVariantRow(index, { color_hex: v })}
-                      autoCapitalize="none"
-                      editable={!saving}
-                    />
-                    <View
-                      style={[
-                        styles.variantSwatch,
-                        {
-                          backgroundColor: isValidHex(variant.color_hex)
-                            ? variant.color_hex.trim()
-                            : colors.neutral[100],
-                        },
-                      ]}
-                    />
-                  </View>
-
-                  {/* Size */}
-                  <Text style={styles.variantFieldLabel}>
-                    <Ruler size={13} color={colors.textSecondary} /> Size *
-                  </Text>
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.categoryRow}
-                  >
-                    {QUICK_SIZES.map((s) => (
-                      <TouchableOpacity
-                        key={s}
+                      <View
                         style={[
-                          styles.categoryChip,
-                          variant.size === s && styles.categoryChipActive,
+                          styles.colorSwatch,
+                          { backgroundColor: opt.hex },
+                          selected && styles.colorSwatchSelected,
+                          opt.hex.toUpperCase() === '#FFFFFF' && styles.colorSwatchBorder,
                         ]}
-                        onPress={() => updateVariantRow(index, { size: s })}
-                        disabled={saving}
                       >
-                        <Text
-                          style={[
-                            styles.categoryChipText,
-                            variant.size === s && styles.categoryChipTextActive,
-                          ]}
-                        >
-                          {s}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                  <TextInputArabic
-                    style={styles.input}
-                    placeholder="Or type a custom size"
-                    value={variant.size}
-                    onChangeText={(v) => updateVariantRow(index, { size: v })}
-                    editable={!saving}
-                  />
+                        {selected ? (
+                          <Check
+                            size={16}
+                            color={isLightColor(opt.hex) ? colors.text : colors.white}
+                            strokeWidth={3}
+                          />
+                        ) : null}
+                      </View>
+                      <Text
+                        style={[styles.colorChipLabel, selected && styles.colorChipLabelActive]}
+                        numberOfLines={1}
+                      >
+                        {opt.name}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
 
-                  {/* Stock */}
-                  <Text style={styles.variantFieldLabel}>Stock Quantity</Text>
-                  <TextInputArabic
-                    style={styles.input}
-                    placeholder="0"
-                    value={variant.stock}
-                    onChangeText={(v) => updateVariantRow(index, { stock: v })}
-                    keyboardType="number-pad"
-                    editable={!saving}
-                  />
-                </View>
-              ))}
+              {/* Available Sizes (shared across all colors) */}
+              <View style={styles.variantsSectionHeader}>
+                <Text style={styles.fieldLabel}>
+                  <Ruler size={14} color={colors.text} /> Available Sizes
+                </Text>
+                <Text style={styles.variantsHint}>
+                  These sizes apply to every color selected above.
+                </Text>
+              </View>
+              <View style={styles.sizeGrid}>
+                {QUICK_SIZES.map((s) => {
+                  const selected = form.sizes.includes(s);
+                  return (
+                    <TouchableOpacity
+                      key={s}
+                      style={[styles.categoryChip, selected && styles.categoryChipActive]}
+                      onPress={() => toggleSize(s)}
+                      disabled={saving}
+                    >
+                      <Text
+                        style={[
+                          styles.categoryChipText,
+                          selected && styles.categoryChipTextActive,
+                        ]}
+                      >
+                        {s}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+                {form.sizes
+                  .filter((s) => !QUICK_SIZES.includes(s))
+                  .map((s) => (
+                    <TouchableOpacity
+                      key={s}
+                      style={[styles.categoryChip, styles.categoryChipActive]}
+                      onPress={() => toggleSize(s)}
+                      disabled={saving}
+                    >
+                      <Text style={[styles.categoryChipText, styles.categoryChipTextActive]}>
+                        {s}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+              </View>
+              <View style={styles.customSizeRow}>
+                <TextInputArabic
+                  style={[styles.input, styles.customSizeInput]}
+                  placeholder="Custom size (e.g. 42)"
+                  value={customSize}
+                  onChangeText={setCustomSize}
+                  editable={!saving}
+                  onSubmitEditing={addCustomSize}
+                />
+                <TouchableOpacity
+                  style={styles.customSizeAddBtn}
+                  onPress={addCustomSize}
+                  disabled={saving || !customSize.trim()}
+                >
+                  <Plus size={18} color={colors.white} />
+                </TouchableOpacity>
+              </View>
 
-              <TouchableOpacity
-                style={styles.addVariantBtn}
-                onPress={addVariantRow}
-                disabled={saving}
-              >
-                <Plus size={16} color={colors.primary[600]} />
-                <Text style={styles.addVariantBtnText}>Add Color / Size Option</Text>
-              </TouchableOpacity>
+              {/* Stock per color & size */}
+              {form.colors.length > 0 && form.sizes.length > 0 ? (
+                <>
+                  <Text style={styles.fieldLabel}>Stock Quantity</Text>
+                  {form.colors.map((c) => (
+                    <View key={c.name} style={styles.stockCard}>
+                      <View style={styles.stockCardHeader}>
+                        <View style={[styles.stockColorDot, { backgroundColor: c.hex }]} />
+                        <Text style={styles.stockColorName}>{c.name}</Text>
+                      </View>
+                      <View style={styles.stockSizesRow}>
+                        {form.sizes.map((s) => (
+                          <View key={s} style={styles.stockSizeBox}>
+                            <Text style={styles.stockSizeLabel}>{s}</Text>
+                            <TextInputArabic
+                              style={styles.stockSizeInput}
+                              value={form.stock[stockKey(c.name, s)] ?? '0'}
+                              onChangeText={(v) => updateStock(c.name, s, v)}
+                              keyboardType="number-pad"
+                              editable={!saving}
+                              placeholder="0"
+                            />
+                          </View>
+                        ))}
+                      </View>
+                    </View>
+                  ))}
+                </>
+              ) : form.colors.length > 0 || form.sizes.length > 0 ? (
+                <Text style={styles.variantsHint}>
+                  Select at least one color and one size to set stock quantities.
+                </Text>
+              ) : null}
 
               {/* Image Upload */}
               <Text style={styles.fieldLabel}>Product Image</Text>
@@ -1210,16 +1292,78 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     marginTop: spacing.md,
   },
-  // Colors & Sizes (variants)
+  // Colors & Sizes
   variantsSectionHeader: {
-    marginTop: spacing.sm,
+    marginTop: spacing.md,
   },
   variantsHint: {
     ...typography.caption,
     color: colors.textSecondary,
     marginBottom: spacing.sm,
   },
-  variantCard: {
+  // Color palette grid
+  colorGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  colorChip: {
+    alignItems: 'center',
+    width: 60,
+  },
+  colorSwatch: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  colorSwatchSelected: {
+    borderColor: colors.primary[600],
+  },
+  colorSwatchBorder: {
+    borderColor: colors.border,
+  },
+  colorChipLabel: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  colorChipLabelActive: {
+    color: colors.primary[700],
+    fontWeight: '600',
+  },
+  // Size grid
+  sizeGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  customSizeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  customSizeInput: {
+    flex: 1,
+    marginBottom: spacing.sm,
+  },
+  customSizeAddBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    backgroundColor: colors.primary[600],
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.sm,
+  },
+  // Stock per color card
+  stockCard: {
     backgroundColor: colors.background,
     borderRadius: radius.md,
     borderWidth: 1.5,
@@ -1227,72 +1371,48 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     marginBottom: spacing.sm,
   },
-  variantCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.sm,
-  },
-  variantBadge: {
-    backgroundColor: colors.primary[50],
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
-    borderRadius: radius.sm,
-  },
-  variantBadgeText: {
-    ...typography.caption,
-    color: colors.primary[700],
-    fontWeight: '600',
-  },
-  variantDeleteBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.error[50],
-  },
-  variantFieldLabel: {
-    ...typography.caption,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    marginBottom: spacing.xs,
-    marginTop: spacing.xs,
-  },
-  variantColorRow: {
+  stockCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-  },
-  variantColorInput: {
-    flex: 1.4,
-  },
-  variantHexInput: {
-    flex: 1,
-  },
-  variantSwatch: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.md,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-  },
-  addVariantBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: radius.md,
-    borderWidth: 1.5,
-    borderColor: colors.primary[600],
-    borderStyle: 'dashed',
-    marginTop: spacing.xs,
     marginBottom: spacing.sm,
   },
-  addVariantBtnText: {
+  stockColorDot: {
+    width: 18,
+    height: 18,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  stockColorName: {
     ...typography.bodySmall,
-    color: colors.primary[600],
     fontWeight: '600',
+    color: colors.text,
+  },
+  stockSizesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  stockSizeBox: {
+    alignItems: 'center',
+    width: 64,
+  },
+  stockSizeLabel: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginBottom: 4,
+    fontWeight: '600',
+  },
+  stockSizeInput: {
+    width: '100%',
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    borderRadius: radius.sm,
+    paddingVertical: 8,
+    textAlign: 'center',
+    ...typography.bodySmall,
+    color: colors.text,
+    backgroundColor: colors.surface,
   },
 });
