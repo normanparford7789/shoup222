@@ -31,6 +31,7 @@ import { colors, spacing, radius, typography, shadows } from '@/lib/theme';
 import { ArabicText as Text, ArabicTextInput as TextInputArabic } from '@/components/ArabicText';
 import { useAuth } from '@/lib/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { confirmAction } from '@/lib/confirm';
 import { Button } from '@/components/Button';
 import type { AffiliateLink, Product, ProductImage } from '@/lib/supabase';
 
@@ -172,33 +173,28 @@ export default function PublisherLinksScreen() {
   };
 
   const handleDeleteLink = (link: AffiliateLinkWithProduct) => {
-    Alert.alert(
-      'Delete Affiliate Link',
-      `Are you sure you want to delete the affiliate link for "${link.product?.name ?? 'this product'}"? This action cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const { error: delErr } = await supabase
-                .from('affiliate_links')
-                .delete()
-                .eq('id', link.id);
-              if (delErr) throw delErr;
-              setLinks((prev) => prev.filter((l) => l.id !== link.id));
-              setLinkedProductIds((prev) => {
-                const next = new Set(prev);
-                next.delete(link.product_id);
-                return next;
-              });
-            } catch (e: any) {
-              Alert.alert('Error', e.message || 'Failed to delete link');
-            }
-          },
-        },
-      ]
+    confirmAction(
+      {
+        title: 'Delete Affiliate Link',
+        message: `Are you sure you want to delete the affiliate link for "${link.product?.name ?? 'this product'}"? This action cannot be undone.`,
+      },
+      async () => {
+        try {
+          const { error: delErr } = await supabase
+            .from('affiliate_links')
+            .delete()
+            .eq('id', link.id);
+          if (delErr) throw delErr;
+          setLinks((prev) => prev.filter((l) => l.id !== link.id));
+          setLinkedProductIds((prev) => {
+            const next = new Set(prev);
+            next.delete(link.product_id);
+            return next;
+          });
+        } catch (e: any) {
+          Alert.alert('Error', e.message || 'Failed to delete link');
+        }
+      }
     );
   };
 
