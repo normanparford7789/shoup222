@@ -22,14 +22,13 @@ import {
   Heart,
   MessageCircle,
   Shield,
-  Image as ImageIcon,
 } from 'lucide-react-native';
 import { colors, spacing, radius, typography, shadows } from '@/lib/theme';
 import { ArabicText as Text, ArabicTextInput as TextInputArabic } from '@/components/ArabicText';
 import { useAuth } from '@/lib/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/Button';
-import { pickAndUploadImage, pickAndUploadVideo, isCloudinaryConfigured } from '@/lib/cloudinary';
+import { pickAndUploadVideo, isCloudinaryConfigured } from '@/lib/cloudinary';
 import type { Reel, Product } from '@/lib/supabase';
 
 type ReelWithProduct = Reel & {
@@ -65,7 +64,7 @@ export default function MerchantReelsScreen() {
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [uploadingVideo, setUploadingVideo] = useState(false);
-  const [uploadingThumb, setUploadingThumb] = useState(false);
+  const [videoUploadProgress, setVideoUploadProgress] = useState(0);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -377,13 +376,15 @@ export default function MerchantReelsScreen() {
                 onPress={async () => {
                   if (uploadingVideo || saving) return;
                   setUploadingVideo(true);
+                  setVideoUploadProgress(0);
                   try {
-                    const url = await pickAndUploadVideo();
+                    const url = await pickAndUploadVideo((percent) => setVideoUploadProgress(percent));
                     if (url) setForm({ ...form, video_url: url });
                   } catch (e: any) {
                     Alert.alert('Upload Error', e.message || 'Failed to upload video');
                   } finally {
                     setUploadingVideo(false);
+                    setVideoUploadProgress(0);
                   }
                 }}
                 disabled={saving || uploadingVideo}
@@ -393,44 +394,18 @@ export default function MerchantReelsScreen() {
                   numberOfLines={1}
                 >
                   {uploadingVideo
-                    ? 'Uploading video…'
+                    ? `Uploading video… ${videoUploadProgress}%`
                     : form.video_url
                     ? 'Video uploaded ✓ (tap to change)'
                     : 'Tap to upload video from device'}
                 </Text>
                 <Video size={20} color={colors.neutral[400]} />
               </TouchableOpacity>
-
-              {/* Thumbnail Upload */}
-              <Text style={styles.fieldLabel}>Thumbnail Image</Text>
-              <TouchableOpacity
-                style={[styles.input, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}
-                onPress={async () => {
-                  if (uploadingThumb || saving) return;
-                  setUploadingThumb(true);
-                  try {
-                    const url = await pickAndUploadImage();
-                    if (url) setForm({ ...form, thumbnail_url: url });
-                  } catch (e: any) {
-                    Alert.alert('Upload Error', e.message || 'Failed to upload thumbnail');
-                  } finally {
-                    setUploadingThumb(false);
-                  }
-                }}
-                disabled={saving || uploadingThumb}
-              >
-                <Text
-                  style={form.thumbnail_url ? styles.uploadPreviewText : styles.uploadPlaceholder}
-                  numberOfLines={1}
-                >
-                  {uploadingThumb
-                    ? 'Uploading thumbnail…'
-                    : form.thumbnail_url
-                    ? 'Thumbnail uploaded ✓ (tap to change)'
-                    : 'Tap to upload thumbnail from device'}
-                </Text>
-                <ImageIcon size={20} color={colors.neutral[400]} />
-              </TouchableOpacity>
+              {uploadingVideo ? (
+                <View style={styles.progressTrack}>
+                  <View style={[styles.progressFill, { width: `${videoUploadProgress}%` }]} />
+                </View>
+              ) : null}
               {!isCloudinaryConfigured() ? (
                 <Text style={styles.configWarning}>
                   Cloudinary not configured. Set EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME and EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET in .env
@@ -774,6 +749,19 @@ const styles = StyleSheet.create({
     color: colors.warning[600],
     marginTop: spacing.xs,
     marginBottom: spacing.sm,
+  },
+  progressTrack: {
+    height: 6,
+    borderRadius: radius.full ?? 999,
+    backgroundColor: colors.neutral[100],
+    overflow: 'hidden',
+    marginTop: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: colors.primary[500] ?? colors.success[500],
+    borderRadius: radius.full ?? 999,
   },
   // No products
   noProductsBox: {
